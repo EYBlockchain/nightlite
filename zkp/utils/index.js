@@ -35,7 +35,9 @@ function strip0x(input) {
 }
 
 /**
- * TODO: This function was undocumented.
+ * TODO: This function was undocumented. Seems to overlap with hashConcat to some degree,
+ * but need the Nightfall team to confirm or deny.
+ *
  * @param {*} c
  * @returns {*} hash
  */
@@ -81,7 +83,7 @@ function concatHexToBuffer(a, b) {
 }
 
 /**
- * Concatenates multiple hex strings into a single hex string, stripping out all '0x's and adding one to the beginning.
+ * Concatenates multiple hex strings into a single hex string, stripping out all '0x's
  *
  * Formerly named concatItems
  *
@@ -92,7 +94,7 @@ function concatHexToSingleString(...items) {
   const combinedBuffer = items
     .map(item => Buffer.from(strip0x(item), 'hex'))
     .reduce((acc, item) => concatHexToBuffer(acc, item));
-  return `0x${combinedBuffer.toString('hex')}`;
+  return combinedBuffer.toString('hex');
 }
 
 module.exports = {

@@ -1,5 +1,5 @@
 const config = require('config');
-const utils = require('./utils.js');
+const utils = require('./utils');
 
 /**
  * Hashes chunks of an array until a single hash is output.
@@ -13,9 +13,7 @@ const utils = require('./utils.js');
  * @returns {String} - Concatenated hash.
  */
 function recursiveHashConcat(...items) {
-  // TODO: strip0x is to maintain previous implementation, but
-  // should test to see if it's actually necessary.
-  const conc = utils.strip0x(utils.concatHexToSingleString(items));
+  const conc = utils.concatHexToSingleString(items);
 
   let hash = utils.hashC(conc);
   while (hash.length > config.get('hashLength') * 2) hash = utils.hashC(hash); // have we reduced it to a single 216 bit hash?
