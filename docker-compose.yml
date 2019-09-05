@@ -1,0 +1,97 @@
+version: '3'
+
+services:
+  api:
+    build:
+      context: ./
+      dockerfile: dev.Dockerfile
+      args:
+        - NPM_TOKEN
+    command: ["npm", "run", "dev"]
+    restart: on-failure
+    volumes:
+      - ./build:/app/build:delegated
+      - ./config:/app/config:delegated
+      - ./package.json:/app/package.json:delegated
+    depends_on:
+      - api-watch
+      - mongo
+      - ganache
+      - organization-api
+      - authentication-api
+    environment:
+      VIRTUAL_HOST: nightfall-sdk-api.docker
+
+  api-watch:
+    build:
+      context: ./
+      dockerfile: dev.Dockerfile
+      args:
+        - NPM_TOKEN
+    command: ["npm", "run", "watch"]
+    volumes:
+      - ./src:/app/src:delegated
+      - ./build:/app/build:delegated
+    logging:
+      options:
+        max-size: 10m
+
+  authentication-api:
+    image: eyblockchainregistry.azurecr.io/authentication-api:latest
+    restart: on-failure
+    depends_on:
+      - mongo
+      - ganache
+    environment:
+      VIRTUAL_HOST: api.authentication.nightfall-sdk-api.docker
+
+  organization-api:
+    image: eyblockchainregistry.azurecr.io/organization-api:latest
+    restart: on-failure
+    volumes:
+      - org-config-volume:/app/build/config
+    environment:
+      VIRTUAL_HOST: api.organization.nightfall-sdk-api.docker
+    depends_on:
+      - ganache
+
+  docs:
+    image: codfish/swagger
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ./swagger.yaml:/app/swagger.yaml:delegated
+    environment:
+      VIRTUAL_HOST: docs.nightfall-sdk-api.docker
+
+  mongo:
+    image: mongo:latest
+    logging:
+      options:
+        max-size: 10m
+
+  ganache:
+    image: trufflesuite/ganache-cli:latest
+    command: ganache-cli -m 'candy maple cake sugar pudding cream honey rich smooth crumble sweet treat' --networkId '333' --db /ganache-data
+    volumes:
+      - ganache-volume:/ganache-data
+
+  truffle:
+    image: ajmay/truffle:5.0.9
+    volumes:
+      - ./truffle/package-lock.json:/truffle/package-lock.json:delegated
+      - ./truffle/package.json:/truffle/package.json:delegated
+      - ./contracts:/truffle/contracts:delegated
+      - ./build/contracts:/truffle/build/contracts:delegated
+    depends_on:
+      - ganache
+    environment:
+      SOLC_VERSION: '^0.5.5'
+      ETH_HOST: ganache
+    logging:
+      options:
+        max-size: 10m
+
+volumes:
+  ganache-volume: {}
+  org-config-volume: {}
+

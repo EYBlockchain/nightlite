@@ -1,0 +1,3 @@
+{
+  rpcProvider: 'http://something-other-than-ganache:8545',
+}

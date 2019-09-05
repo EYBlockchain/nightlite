@@ -1,0 +1,356 @@
+openapi: 3.0.0
+
+info:
+  version: "1.0.0"
+  title: Nightfall Sdk API Documentation
+
+tags:
+  - name: Posts
+    description: Posts are an example resource to use as reference. They refer to blog posts.
+  - name: Health check
+
+paths:
+  /health-check:
+    get:
+      tags:
+        - Health check
+      description: Conducts health check.
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+        400:
+          $ref: '#/components/responses/400'
+        401:
+          $ref: '#/components/responses/401'
+        404:
+          $ref: '#/components/responses/404'
+        500:
+          $ref: '#/components/responses/500'
+  /posts:
+    get:
+      tags:
+        - Posts
+      description: Returns a collection of posts.
+      parameters:
+        - $ref: '#/components/parameters/page'
+      responses:
+        200:
+          description: Success
+          headers:
+            Status:
+              description: 200 OK
+              type: string
+            Total-Count:
+              description: Total number of posts returned in your query. Note that the count represents the total amount of available results, not the amount returned as part of the current response.
+              type: integer
+              format: int32
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Post'
+        400:
+          $ref: '#/components/responses/400'
+        401:
+          $ref: '#/components/responses/401'
+        404:
+          $ref: '#/components/responses/404'
+        500:
+          $ref: '#/components/responses/500'
+    post:
+      tags:
+        - Posts
+      requestBody:
+        $ref: '#/components/requestBodies/PostBody'
+      responses:
+        201:
+          description: Created
+          headers:
+            Status:
+              description: 201 Created
+              type: string
+            Location:
+              description: /posts/0x147B8eb97fD247D06C4006D269c90C1908Fb5D54
+              type: string
+              format: url
+          content:
+            application/json:
+              $ref: '#/components/schemas/Post'
+        400:
+          $ref: '#/components/responses/400'
+        401:
+          $ref: '#/components/responses/401'
+        415:
+          $ref: '#/components/responses/415'
+        422:
+          $ref: '#/components/responses/422'
+        500:
+          $ref: '#/components/responses/500'
+  /posts/{address}:
+    get:
+      tags:
+        - Posts
+      description: Returns a single post.
+      parameters:
+        - $ref: '#/components/parameters/address'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                  $ref: '#/components/schemas/Post'
+        400:
+          $ref: '#/components/responses/400'
+        401:
+          $ref: '#/components/responses/401'
+        404:
+          $ref: '#/components/responses/404'
+        500:
+          $ref: '#/components/responses/500'
+    patch:
+      tags:
+        - Posts
+      description: Partially updates a post with whatever fields are sent in the request.
+      parameters:
+        - $ref: '#/components/parameters/address'
+      requestBody:
+        $ref: '#/components/requestBodies/PostBody'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                  $ref: '#/components/schemas/Post'
+        400:
+          $ref: '#/components/responses/400'
+        401:
+          $ref: '#/components/responses/401'
+        404:
+          $ref: '#/components/responses/404'
+        415:
+          $ref: '#/components/responses/415'
+        422:
+          $ref: '#/components/responses/422'
+        500:
+          $ref: '#/components/responses/500'
+    put:
+      tags:
+        - Posts
+      description: Replaces a post in it's entirety with new data.
+      parameters:
+        - $ref: '#/components/parameters/address'
+      requestBody:
+        $ref: '#/components/requestBodies/PostBody'
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                  $ref: '#/components/schemas/Post'
+        400:
+          $ref: '#/components/responses/400'
+        401:
+          $ref: '#/components/responses/401'
+        404:
+          $ref: '#/components/responses/404'
+        415:
+          $ref: '#/components/responses/415'
+        422:
+          $ref: '#/components/responses/422'
+        500:
+          $ref: '#/components/responses/500'
+    delete:
+      tags:
+        - Posts
+      description: Delete a post.
+      parameters:
+        - $ref:'#/components/parameters/address'
+      responses:
+        204:
+          $ref: '#/components/responses/204'
+        401:
+          $ref: '#/components/responses/401'
+        404:
+          $ref: '#/components/responses/404'
+        500:
+          $ref: '#/components/responses/500'
+
+components:
+  parameters:
+    uuid:
+      name: uuid
+      in: path
+      description: Universally unique identifier
+      example: 523e4567-e89b-12d3-a456-426655440000
+      schema:
+        type: string
+        format: uuid
+    address:
+      name: address
+      in: path
+      description: Ethereum hex address
+      example: 0x147B8eb97fD247D06C4006D269c90C1908Fb5D54
+      schema:
+        type: string
+    page:
+      name: page
+      in: query
+      description: Requests that return multiple items will be paginated to 30 items by default. You can specify further pages with the `?page` parameter.
+      required: false
+      schema:
+        type: integer
+        format: int32
+      examples:
+        page:
+          value: 2
+    per_page:
+      name: per_page
+      in: query
+      description: You can also set a custom page size up to 100 with the `?per_page` parameter.
+      required: false
+      schema:
+        type: integer
+        format: int32
+      examples:
+        page:
+          value: 2
+
+  schemas:
+    Post:
+      type: object
+      required:
+      - title
+      properties:
+        title:
+          type: string
+          description: Post title.
+          example: Lorem ipsum dolor sit amet.
+        body:
+          type: string
+          description: Post body.
+          example: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+        modified_at:
+          type: string
+          format: date-time
+          description: Last modified ISO 8601 date time string (UTC).
+          example: '2017-03-28T17:30:00Z'
+          readOnly: true
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+    ValidationError:
+      description: Validation error response body.
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+          example: Validation failed.
+        errors:
+          type: array
+          description: Field errors
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: name
+              message:
+                type: string
+                example: Name is required
+    Error:
+      description: Basic error response body
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+          example: Sample error message text
+
+  responses:
+    204:
+      description: No Content
+      headers:
+        Status:
+          description: 204 No Content
+          type: string
+    400:
+      description: Bad Request
+      examples:
+        application/json:
+          message: Body should be a valid JSON object
+      headers:
+        Status:
+          description: 400 Bad Request
+          type: string
+      schema:
+        $ref: '#/components/schemas/Error'
+    401:
+      description: Unauthorized
+      examples:
+        application/json:
+          message: You're not authorized to access this item
+      headers:
+        Status:
+          description: 401 Unauthorized
+          type: string
+      schema:
+        $ref: '#/components/schemas/Error'
+    404:
+      description: Entity not found
+      examples:
+        application/json:
+          message: Campaign could not be found
+      headers:
+        Status:
+          description: 404 Not Found
+          type: string
+      schema:
+        $ref: '#/components/schemas/Error'
+    415:
+      description: Unsupported Media Type
+      examples:
+        application/json:
+          message: The API refuses to accept the request because the payload format is in an unsupported format. The format problem might be due to the request's indicated `Content-Type` or `Content-Encoding`, or as a result of inspecting the data directly.
+      headers:
+        Status:
+          description: 415 Unsupported Media Type
+          type: string
+      schema:
+        $ref: '#/components/schemas/Error'
+    422:
+      description: Unprocessable Entity
+      headers:
+        Status:
+          description: 422 Unprocessable Entity
+          type: string
+      schema:
+        $ref: '#/components/schemas/ValidationError'
+    500:
+      description: Internal Server Error
+      headers:
+        Status:
+          description: 500 Internal Server Error
+          type: string
+      schema:
+        $ref: '#/components/schemas/Error'
+
+  requestBodies:
+    PostBody:
+      description: The post data to update. Below is an example of the request body you should send along. **NOTE** - You can send as little as one field in a PATCH request.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Post'
