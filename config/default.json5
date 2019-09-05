@@ -1,3 +1,4 @@
 {
   hashLength: 27,
+  merkleDepth: 33,
 }
