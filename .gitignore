@@ -79,3 +79,5 @@ config/local.json5
 config/local.json
 config/local.yml
 config/local.yaml
+
+.vscode/*

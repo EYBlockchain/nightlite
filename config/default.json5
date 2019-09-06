@@ -1,4 +1,5 @@
 {
   hashLength: 27,
   merkleDepth: 33,
+  zokratesPackingSize: 128,
 }
