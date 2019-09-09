@@ -3,35 +3,38 @@ const config = require('config');
 /**
  * Checks if string has a leading 0x and adds it if it's not present.
  *
- * @param {String} input
- * @throws {TypeError} - If it receives something other than a string.
+ * @param {*} input
+ * @throws {TypeError} - If it receives null or undefined input
  * @returns {String}
  */
 function ensure0x(input) {
-  if (typeof input !== 'string') {
-    throw new TypeError('Received something other than a string');
+  if (!input) {
+    throw new TypeError('Received null or undefined input');
   }
-  if (input.indexOf('0x') !== 0) {
-    return `0x${input}`;
+  const hexString = input.toString();
+  if (hexString.indexOf('0x') !== 0) {
+    return `0x${hexString}`;
   }
-  return input;
+  return hexString;
 }
 
 /**
  * Removes leading 0x on a string.
  *
- * @param {String} input
- * @throws {TypeError} - If it receives something other than a string.
+ * @param {*} input
+ * @throws {TypeError} - If it receives null or undefined input
  * @returns {String}
  */
 function strip0x(input) {
-  if (typeof input !== 'string') {
-    throw new TypeError('Received something other than a string');
+  if (!input) {
+    throw new TypeError('Received null or undefined input');
   }
-  if (input.indexOf('0x') === 0) {
-    return input.slice(2).toString();
+  const hexString = input.toString();
+
+  if (hexString.indexOf('0x') === 0) {
+    return hexString.slice(2);
   }
-  return input;
+  return hexString;
 }
 
 /**
