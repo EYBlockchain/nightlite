@@ -38,6 +38,20 @@ function strip0x(input) {
 }
 
 /**
+ * Checks to see if input is only hexadecimal characters.
+ *
+ * This function doesn't care if the input starts with 0x,
+ * so 0x123abc and 0x123123 will both return true.
+ *
+ * @param {String} input
+ * @returns {Boolean}
+ */
+function isHex(h) {
+  const regexp = /^[0-9a-fA-F]+$/;
+  return regexp.test(strip0x(h));
+}
+
+/**
  * TODO: This function was undocumented. Seems to overlap with hashConcat to some degree,
  * but need the Nightfall team to confirm or deny.
  *
@@ -101,6 +115,7 @@ function concatHexToSingleString(...items) {
 }
 
 module.exports = {
+  isHex,
   ensure0x,
   strip0x,
   hashC,

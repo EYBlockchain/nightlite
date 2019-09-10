@@ -42,6 +42,7 @@
     "body-parser": "^1.19.0",
     "config": "^3.2.2",
     "cors": "^2.8.5",
+    "ethers": "^4.0.37",
     "express": "^4.17.1",
     "express-validation": "^1.0.2",
     "joi": "^14.3.1",
