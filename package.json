@@ -36,7 +36,7 @@
   "husky": {
     "hooks": {
       "pre-commit": "cod-scripts pre-commit",
-      "commit-msg": "cod-scripts commitlint"
+      "commit-msg": "cod-scripts commitlint -E HUSKY_GIT_PARAMS"
     }
   }
 }
