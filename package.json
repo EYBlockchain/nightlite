@@ -1,5 +1,5 @@
 {
-  "name": "nightfall-sdk-api",
+  "name": "@eyblockchain/nightfall-sdk",
   "description": "SDK for Nightfall",
   "license": "MIT",
   "version": "0.0.0",
@@ -23,7 +23,8 @@
   "dependencies": {
     "@eyblockchain/dapp-utils": "^1.5.0",
     "@eyblockchain/zokrates.js": "^1.1.0",
-    "config": "^3.2.2"
+    "config": "^3.2.2",
+    "hex-to-binary": "^1.0.1"
   },
   "publishConfig": {
     "registry": "https://registry.ey.npme.io/",

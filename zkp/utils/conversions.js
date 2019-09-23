@@ -1,7 +1,7 @@
 /**
  * This module handles conversions from one thing to another.
  */
-const utils = require('./utils');
+const utils = require('./index');
 
 /**
  * Converts hex strings into byte (decimal values).
