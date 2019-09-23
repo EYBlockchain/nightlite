@@ -1,12 +1,10 @@
 const config = require('config');
 const ethersUtils = require('@eyblockchain/dapp-utils/ethers');
+const zokrates = require('@eyblockchain/zokrates.js');
 const nfTokenJson = require('../build/contracts/ERC721Interface.json');
 const utils = require('../zkp/utils');
 const computeVectors = require('../zkp/computeVectors');
 const Element = require('../zkp/Element');
-
-// TODO: Replace with zokrates.
-const zokrates = null;
 
 /**
  * Mint a commitment

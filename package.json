@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@eyblockchain/dapp-utils": "^1.5.0",
+    "@eyblockchain/zokrates.js": "^1.1.0",
     "config": "^3.2.2"
   },
   "publishConfig": {
