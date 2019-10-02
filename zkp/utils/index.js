@@ -1,4 +1,5 @@
-const config = require('config');
+const crypto = require('crypto');
+const config = require('../../config/config');
 
 /**
  * Checks if string has a leading 0x and adds it if it's not present.
@@ -62,32 +63,29 @@ function hashC(c) {
   let hash = '';
   let conc = c;
   while (conc) {
-    const slc = conc.slice(-config.get('hashLength') * 4); // grab the first 432 bits (or whatever is left)
-    conc = conc.substring(0, conc.length - config.get('hashLength') * 4); // and remove it from the input string
+    const slc = conc.slice(-config.hashLength * 4); // grab the first 432 bits (or whatever is left)
+    conc = conc.substring(0, conc.length - config.hashLength * 4); // and remove it from the input string
     hash =
       crypto
         .createHash('sha256') // hash it and grab 216 bits
         .update(slc, 'hex')
         .digest('hex')
-        .slice(-config.get('hashLength') * 2) + hash;
+        .slice(-config.hashLength * 2) + hash;
   }
   return hash;
 }
 
 /**
- * Concatenates two hex strings into a single buffer.
+ * Concatenates two buffers into a single buffer.
  *
  * Formerly named concat
  *
- * @param {String} a
- * @param {String} b
+ * @param {Buffer} a
+ * @param {Buffer} b
  * @throws {TypeError} - If it receives something other than a string.
  * @returns {Buffer}
  */
-function concatHexToBuffer(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') {
-    throw new TypeError('Received something other than a string');
-  }
+function concatBuffers(a, b) {
   const length = a.length + b.length;
   const buffer = Buffer.allocUnsafe(length); // creates a buffer object of length 'length'
   for (let i = 0; i < a.length; i += 1) {
@@ -107,11 +105,23 @@ function concatHexToBuffer(a, b) {
  * @param {Array} items - Array of hex strings.
  * @returns {String}
  */
-function concatHexToSingleString(...items) {
+function concatHexToSingleString(items) {
   const combinedBuffer = items
     .map(item => Buffer.from(strip0x(item), 'hex'))
-    .reduce((acc, item) => concatHexToBuffer(acc, item));
+    .reduce((acc, item) => concatBuffers(acc, item));
   return combinedBuffer.toString('hex');
+}
+
+/**
+ * Flattens nested arrays into a single flat array.
+ * @param {Array} input - Nested arrays
+ * @returns {Array} - Flattened array
+ */
+function flattenDeep(input) {
+  return input.reduce(
+    (acc, val) => (Array.isArray(val) ? acc.concat(flattenDeep(val)) : acc.concat(val)),
+    [],
+  );
 }
 
 module.exports = {
@@ -119,6 +129,7 @@ module.exports = {
   ensure0x,
   strip0x,
   hashC,
-  concatHexToBuffer,
+  concatBuffers,
   concatHexToSingleString,
+  flattenDeep,
 };

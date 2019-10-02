@@ -1,4 +1,4 @@
-const config = require('config');
+const config = require('../config/config');
 const utils = require('./utils');
 
 /**
@@ -16,7 +16,7 @@ function recursiveHashConcat(...items) {
   const conc = utils.concatHexToSingleString(items);
 
   let hash = utils.hashC(conc);
-  while (hash.length > config.get('hashLength') * 2) hash = utils.hashC(hash); // have we reduced it to a single 216 bit hash?
+  while (hash.length > config.hashLength * 2) hash = utils.hashC(hash); // have we reduced it to a single 216 bit hash?
   return utils.ensure0x(hash);
 }
 
