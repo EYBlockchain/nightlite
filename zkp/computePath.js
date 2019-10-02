@@ -1,4 +1,4 @@
-const config = require('config');
+const config = require('../config/config');
 const utils = require('./utils');
 
 /**
@@ -28,14 +28,15 @@ async function getMerkleNode(account, shieldContract, index) {
  * the path from myToken to the Merkle Root and whether the sister node is to the left or the right (this is needed because the order of hashing matters)
  */
 async function computePath(account, shieldContract, _myToken, myTokenIndex) {
+  const { hashLength } = config;
   const myToken = utils.strip0x(_myToken);
-  if (myToken.length !== config.get('hashLength') * 2) {
+  if (myToken.length !== hashLength * 2) {
     throw new Error(`tokens have incorrect length: ${myToken}`);
   }
   const leafIndex = utils.getLeafIndexFromZCount(myTokenIndex);
 
   // define Merkle Constants:
-  const merkleDepth = config.get('merkleDepth');
+  const { merkleDepth } = config;
 
   // get the relevant token data from the contract
   let p = []; // direct path
@@ -113,9 +114,9 @@ async function computePath(account, shieldContract, _myToken, myTokenIndex) {
   // check the lengths of the hashes of the path and the sister-path - they should all be a set length:
   for (let i = 0; i < p.length; i += 1) {
     p[i].nodeHashOld = utils.strip0x(p[i].nodeHashOld);
-    if (p[i].nodeHashOld.length !== 0 && p[i].nodeHashOld.length !== config.get('hashLength') * 2)
+    if (p[i].nodeHashOld.length !== 0 && p[i].nodeHashOld.length !== hashLength * 2)
       throw new Error(`path nodeHash has incorrect length: ${p[i].nodeHashOld}`);
-    if (s[i].nodeHashOld.length !== 0 && s[i].nodeHashOld.length !== config.get('hashLength') * 2)
+    if (s[i].nodeHashOld.length !== 0 && s[i].nodeHashOld.length !== hashLength * 2)
       throw new Error(`sister path nodeHash has incorrect length: ${s[i].nodeHashOld}`);
   }
 
@@ -123,7 +124,7 @@ async function computePath(account, shieldContract, _myToken, myTokenIndex) {
     s
       .map(pos => pos.sisterSide)
       .join('')
-      .padEnd(config.get('zokratesPackingSize'), '0'),
+      .padEnd(config.zokratesPackingSize, '0'),
   ); // create a hex encoding of all the sister positions
   return { path: s.map(pos => utils.ensure0x(pos.nodeHashOld)), positions: sisterPositions }; // return the sister-path of nodeHashes together with the encoding of which side each is on
 }

@@ -1,6 +1,7 @@
 const hexToBinary = require('hex-to-binary');
-const config = require('config');
+const config = require('../config/config');
 const utils = require('./utils');
+const conversions = require('./utils/conversions');
 
 /**
  * Computes the sequence of numbers for `zokrates.computeWitness()`
@@ -24,9 +25,9 @@ function computeVectors(elements) {
         break;
       case 'field': // each vector element will be a 'decimal representation' of integers modulo a prime. p=21888242871839275222246405745257275088548364400416034343698204186575808495617 (roughly = 2*10e76 or = 2^254)
         a = a.concat(
-          utils.hexToFieldPreserve(
+          conversions.hexToFieldPreserve(
             utils.strip0x(element.hex),
-            config.get('zokratesPackingSize'),
+            config.zokratesPackingSize,
             element.packets,
           ),
         );

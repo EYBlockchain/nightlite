@@ -125,6 +125,18 @@ function convertBase(str, fromBase, toBase) {
 }
 
 /**
+ * Converts hex strings into decimal strings.
+ * @param {String} hexStr
+ * @returns {String}
+ */
+function hexToDecimal(hexStr) {
+  if (hexStr.substring(0, 2) === '0x') {
+    return convertBase(hexStr.substring(2).toLowerCase(), 16, 10);
+  }
+  return convertBase(hexStr.toLowerCase(), 16, 10);
+}
+
+/**
  *
  * Splits a binary number into array chunks.
  *
@@ -176,7 +188,7 @@ function splitHexToBitsN(hexStr, N) {
  */
 function hexToFieldPreserve(hexStr, packingSize, packets) {
   let bitsArr = [];
-  bitsArr = splitHexToBitsN(utils.strip0x(hexStr).toString(), packingSize.toString());
+  bitsArr = splitHexToBitsN(utils.strip0x(hexStr), packingSize.toString());
   let decArr = []; // decimal array
   decArr = bitsArr.map(item => convertBase(item.toString(), 2, 10));
   // now we need to add any missing zero elements
@@ -189,6 +201,7 @@ function hexToFieldPreserve(hexStr, packingSize, packets) {
 
 module.exports = {
   convertBase,
+  hexToDecimal,
   hexToFieldPreserve,
   hexToBytes,
 };

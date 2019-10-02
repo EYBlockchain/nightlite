@@ -1,4 +1,4 @@
-const config = require('config');
+const config = require('../config/config');
 const utils = require('./utils');
 
 /**
@@ -26,7 +26,7 @@ function hashConcat(...items) {
     .createHash('sha256')
     .update(concatValue, 'hex')
     .digest('hex')
-    .slice(-(config.get('hashLength') * 2))}`;
+    .slice(-(config.hashLength * 2))}`;
   return hash;
 }
 
