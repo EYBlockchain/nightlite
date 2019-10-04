@@ -1,5 +1,7 @@
 const config = require('../config/config');
 const utils = require('./utils');
+const conversions = require('./utils/conversions');
+const getLeafIndexFromZCount = require('./getLeafIndexFromZCount');
 
 /**
 @notice gets a node from the merkle tree data from the nfTokenShield contract.
@@ -8,9 +10,9 @@ const utils = require('./utils');
 @param {integer} index - the index of the token in the merkle tree, which we want to get from the nfTokenShield contract.
 @returns {Array[integer,Array[string,...]]} [chunkNumber, chunks[]] - where chunkNumber is the same as the input chunkNumber (returned for convenience), and chunks[] is an array of hex strings which represent token commitments (leaf nodes) or non-leaf nodes of the merkle tree.
 */
-async function getMerkleNode(account, shieldContract, index) {
+async function getMerkleNode(shieldContract, index) {
   // get the chunk
-  const node = await shieldContract.M.call(index, { from: account });
+  const node = await shieldContract.M(index);
   return node;
 }
 
@@ -33,7 +35,7 @@ async function computePath(account, shieldContract, _myToken, myTokenIndex) {
   if (myToken.length !== hashLength * 2) {
     throw new Error(`tokens have incorrect length: ${myToken}`);
   }
-  const leafIndex = utils.getLeafIndexFromZCount(myTokenIndex);
+  const leafIndex = getLeafIndexFromZCount(myTokenIndex);
 
   // define Merkle Constants:
   const { merkleDepth } = config;
@@ -41,7 +43,7 @@ async function computePath(account, shieldContract, _myToken, myTokenIndex) {
   // get the relevant token data from the contract
   let p = []; // direct path
   let p0 = leafIndex; // index of path node in the merkle tree
-  let node = await getMerkleNode(account, shieldContract, p0);
+  let node = await getMerkleNode(shieldContract, p0);
   node = utils.strip0x(node);
   if (node !== myToken)
     throw new Error(
@@ -69,13 +71,13 @@ async function computePath(account, shieldContract, _myToken, myTokenIndex) {
       sisterSide = '1'; // conversely if p is odd then the sister will be on the right. Encode this as 1
     }
 
-    nodeHash = getMerkleNode(account, shieldContract, p0);
+    nodeHash = getMerkleNode(shieldContract, p0);
     p[r] = {
       merkleIndex: p0,
       nodeHashOld: nodeHash,
     };
 
-    nodeHash = getMerkleNode(account, shieldContract, s0);
+    nodeHash = getMerkleNode(shieldContract, s0);
     s[r] = {
       merkleIndex: s0,
       nodeHashOld: nodeHash,
@@ -85,7 +87,7 @@ async function computePath(account, shieldContract, _myToken, myTokenIndex) {
     p0 = t0;
   }
   // separate case for the root:
-  nodeHash = getMerkleNode(account, shieldContract, 0);
+  nodeHash = getMerkleNode(shieldContract, 0);
   p[0] = {
     merkleIndex: 0,
     nodeHashOld: nodeHash,
@@ -120,12 +122,17 @@ async function computePath(account, shieldContract, _myToken, myTokenIndex) {
       throw new Error(`sister path nodeHash has incorrect length: ${s[i].nodeHashOld}`);
   }
 
-  const sisterPositions = utils.binToHex(
-    s
-      .map(pos => pos.sisterSide)
-      .join('')
-      .padEnd(config.zokratesPackingSize, '0'),
-  ); // create a hex encoding of all the sister positions
+  const sisterPositions = utils.ensure0x(
+    conversions.convertBase(
+      s
+        .map(pos => pos.sisterSide)
+        .join('')
+        .padEnd(config.zokratesPackingSize, '0'),
+      2,
+      16,
+    ),
+  );
+
   return { path: s.map(pos => utils.ensure0x(pos.nodeHashOld)), positions: sisterPositions }; // return the sister-path of nodeHashes together with the encoding of which side each is on
 }
 
