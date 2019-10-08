@@ -1,6 +1,6 @@
-const crypto = require('crypto');
 const config = require('../config/config');
 const utils = require('./utils');
+const crypto = require('crypto');
 
 /**
  * Converts array of into array of Buffers into a single buffer,
