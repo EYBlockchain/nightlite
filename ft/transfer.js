@@ -8,6 +8,14 @@ const { hexToDecimal } = require('../zkp/utils/conversions');
 const computeVectors = require('../zkp/computeVectors');
 const Element = require('../zkp/Element');
 
+
+/**
+ * Transfer a commitment
+* @param {string} tokenId - the asset token
+
+*/
+
+
 async function transfer() {
 
 
