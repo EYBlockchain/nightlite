@@ -1,7 +1,0 @@
-{
-  offchainDbUrl: 'OFFCHAIN_DB_URL',
-  offchainDbName: 'OFFCHAIN_DB_NAME',
-  organizationUrl: 'ORGANIZATION_URL',
-  rpcProvider: 'RPC_PROVIDER',
-  authenticationUrl: 'AUTHENTICATION_URL',
-}

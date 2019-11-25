@@ -14,20 +14,21 @@
     "lint:sol": "solium -d contracts"
   },
   "devDependencies": {
-    "cod-scripts": "^2.1.0",
+    "cod-scripts": "^3.2.0",
     "ethlint": "^1.2.4",
     "markdownlint-cli": "^0.18.0",
     "nodemon": "^1.19.2",
     "prettier-plugin-solidity": "^1.0.0-alpha.31"
   },
   "dependencies": {
-    "@eyblockchain/dapp-utils": "^1.5.0",
-    "@eyblockchain/zokrates.js": "^1.1.4",
+    "@eyblockchain/zokrates.js": "^1.2.0",
+    "big-integer": "^1.6.48",
     "config": "^3.2.2",
-    "hex-to-binary": "^1.0.1"
+    "hex-to-binary": "^1.0.1",
+    "safe-buffer": "^5.2.0"
   },
   "publishConfig": {
-    "registry": "https://registry.ey.npme.io/",
+    "registry": "http://registry.npmjs.org/",
     "access": "public"
   },
   "eslintConfig": {
