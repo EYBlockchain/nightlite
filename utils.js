@@ -9,6 +9,7 @@ const BI = require('big-integer');
 const hexToBinary = require('hex-to-binary');
 const crypto = require('crypto');
 const { Buffer } = require('safe-buffer');
+const logger = require('./logger');
 
 const inputsHashLength = 32;
 
@@ -381,9 +382,9 @@ function xor(a, b) {
   for (let i = 0; i < length; i += 1) {
     buffer[i] = a[i] ^ b[i]; // eslint-disable-line
   }
-  // a.forEach((item)=>console.log("xor input a: " + item))
-  // b.forEach((item)=>console.log("xor input b: " + item))
-  // buffer.forEach((item)=>console.log("xor outputs: " + item))
+  // a.forEach((item)=>logger.debug("xor input a: " + item))
+  // b.forEach((item)=>logger.debug("xor input b: " + item))
+  // buffer.forEach((item)=>logger.debug("xor outputs: " + item))
   return buffer;
 }
 
@@ -490,6 +491,55 @@ function padHex(A, l) {
   return ensure0x(strip0x(A).padStart(l / 4, '0'));
 }
 
+/**
+Function to compute the sequence of numbers that go after the 'a' in:
+$ 'zokrates compute-witness -a'.
+These will be passed into a ZoKrates container by zokrates.js to compute a witness.
+Note that we don't always encode these numbers in the same way (sometimes they are individual bits, sometimes more complex encoding is used to save space e.g. fields ).
+@param {array} elements - the array of Element objects that represent the parameters we wish to encode for ZoKrates.
+*/
+
+function formatInputsForZkSnark(elements) {
+  let a = [];
+  elements.forEach(element => {
+    switch (element.encoding) {
+      case 'bits':
+        a = a.concat(hexToBin(strip0x(element.hex)));
+        break;
+
+      case 'bytes':
+        a = a.concat(hexToBytes(strip0x(element.hex)));
+        break;
+
+      case 'field':
+        // each vector element will be a 'decimal representation' of integers modulo a prime. p=21888242871839275222246405745257275088548364400416034343698204186575808495617 (roughly = 2*10e76 or = 2^254)
+        a = a.concat(hexToFieldPreserve(element.hex, element.packingSize, element.packets, 1));
+        break;
+
+      default:
+        throw new Error('Encoding type not recognised');
+    }
+  });
+  return a;
+}
+
+function gasUsedStats(txReceipt, functionName) {
+  logger.debug(`\nGas used in ${functionName}:`);
+  const { gasUsed } = txReceipt.receipt;
+  const gasUsedLog = txReceipt.logs.filter(log => {
+    return log.event === 'GasUsed';
+  });
+  const gasUsedByShieldContract = Number(gasUsedLog[0].args.byShieldContract.toString());
+  const gasUsedByVerifierContract = Number(gasUsedLog[0].args.byVerifierContract.toString());
+  const refund = gasUsedByVerifierContract + gasUsedByShieldContract - gasUsed;
+  logger.debug('Total:', gasUsed);
+  logger.debug('By shield contract:', gasUsedByShieldContract);
+  logger.debug('By verifier contract (pre refund):', gasUsedByVerifierContract);
+  logger.debug('Refund:', refund);
+  logger.debug('Attributing all of refund to the verifier contract...');
+  logger.debug('By verifier contract (post refund):', gasUsedByVerifierContract - refund);
+}
+
 module.exports = {
   isHex,
   utf8StringToHex,
@@ -523,4 +573,6 @@ module.exports = {
   flattenDeep,
   padHex,
   leftPadHex,
+  formatInputsForZkSnark,
+  gasUsedStats,
 };

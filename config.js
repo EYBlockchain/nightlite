@@ -27,8 +27,10 @@ i.e. DIRNAME_DIRPATH_REL: "/dirName/" is a relative path which (on the host mach
 ABS - absolute path
 */
 module.exports = {
+  LEAF_HASHLENGTH: 32, // expected length of an input to a hash in bytes
   INPUTS_HASHLENGTH: 32, // expected length of an input to a hash in bytes
   MERKLE_HASHLENGTH: 27, // expected length of inputs to hashes up the merkle tree, in bytes
+  NODE_HASHLENGTH: 27,
   BATCH_PROOF_SIZE: 20, // the number of proofs in a batch (you will need to redo the proofs if oyu change this)
   //* ****
   ZOKRATES_PRIME: '21888242871839275222246405745257275088548364400416034343698204186575808495617', // decimal representation of the prime p of GaloisField(p)
@@ -56,5 +58,4 @@ module.exports = {
 
   POLLING_FREQUENCY: 6000, // How many milliseconds to wait between each poll
   TREE_HEIGHT: 32,
-  NODE_HASHLENGTH: 27,
 };
