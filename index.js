@@ -3,6 +3,7 @@ const merkleTree = require('./merkleTree');
 const provider = require('./provider');
 const vks = require('./vks');
 const erc20 = require('./erc20');
+const erc721 = require('./erc721');
 
 module.exports = {
   generateZokratesFiles,
@@ -10,4 +11,5 @@ module.exports = {
   provider,
   vks,
   erc20,
+  erc721,
 };
