@@ -18,15 +18,18 @@ const Web3 = require('./provider');
 const erc20Interface = require('./contracts/ERC20Interface.json');
 
 /**
- * Mint a coin
+ * Mint a fungible token commitment.
+ *
+ * Note that `ownerPublicKey` is NOT the same as the user's Ethereum address. This is a 32 byte hex that is unique to a given user.
+ *
  * @param {String} amount - the value of the coin
- * @param {String} ownerPublicKey - Alice's public key
+ * @param {String} ownerPublicKey - The minter's ZKP public key. Note that this is NOT the same as their Ethereum address.
  * @param {String} salt - Alice's token serial number as a hex string
  * @param {String} vkId
  * @param {Object} blockchainOptions
  * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
- * @param {String} blockchainOptions.account - Account that is sending these transactions
+ * @param {String} blockchainOptions.account - Account that is sending these transactions. Must be token owner.
  * @returns {String} commitment - Commitment of the minted coins
  * @returns {Number} commitmentIndex
  */
