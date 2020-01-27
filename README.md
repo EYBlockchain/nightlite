@@ -8,6 +8,7 @@ protocol on other applications.
 
 - [Installation and Configuration](#installation-and-configuration)
 - [Trusted Setup](#trusted-setup)
+- [ZKP Public/Private Keys](#zkp-publicprivate-keys)
 - [Deploy Necessary Contracts](#deploy-necessary-contracts)
 - [Deploy VKs to Registry](#deploy-vks-to-registry)
 - [Run Nightfall Functions](#run-nightfall-functions)
@@ -65,6 +66,22 @@ documentation in `setup/generateZokratesFiles()` for usage instructions.
 
 The Trusted Setup step will take approximately one hour. The Trusted Setup step will need to be
 re-run for a given .code file whenever it is changed.
+
+## ZKP Public/Private Keys
+
+In order to make private transactions, you will need a ZKP public/private key pair. This is separate
+from the typical Ethereum public/private key pair.
+
+The ZKP public/private keys are both 32 bytes long. As a string, this a 66 character value (0x + 64
+characters).
+
+You can generate a private key by generating any random 32 byte string (you can use our
+`utils.randomHex(32)` function).
+
+You can generate your matching public key by hashing it (you can use our `utils.hash()` function).
+
+Just as with typical Ethereum key pairs, losing your private key can mean the loss of any
+commitments you hold.
 
 ## Deploy Necessary Contracts
 

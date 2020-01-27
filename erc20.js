@@ -23,7 +23,7 @@ const erc20Interface = require('./contracts/ERC20Interface.json');
  * Note that `ownerPublicKey` is NOT the same as the user's Ethereum address. This is a 32 byte hex that is unique to a given user.
  *
  * @param {String} amount - the value of the coin
- * @param {String} ownerPublicKey - The minter's ZKP public key. Note that this is NOT the same as their Ethereum address.
+ * @param {String} zkpPublicKey - The minter's ZKP public key. Note that this is NOT the same as their Ethereum address.
  * @param {String} salt - Alice's token serial number as a hex string
  * @param {String} vkId
  * @param {Object} blockchainOptions
@@ -33,7 +33,7 @@ const erc20Interface = require('./contracts/ERC20Interface.json');
  * @returns {String} commitment - Commitment of the minted coins
  * @returns {Number} commitmentIndex
  */
-async function mint(amount, ownerPublicKey, salt, vkId, blockchainOptions, zokratesOptions) {
+async function mint(amount, zkpPublicKey, salt, vkId, blockchainOptions, zokratesOptions) {
   const { fTokenShieldJson, fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -54,18 +54,13 @@ async function mint(amount, ownerPublicKey, salt, vkId, blockchainOptions, zokra
   logger.debug('\nIN MINT...');
 
   // Calculate new arguments for the proof:
-  const commitment = utils.concatenateThenHash(amount, ownerPublicKey, salt);
+  const commitment = utils.concatenateThenHash(amount, zkpPublicKey, salt);
 
   logger.debug('Existing Proof Variables:');
   const p = config.ZOKRATES_PACKING_SIZE;
   const pt = Math.ceil((config.LEAF_HASHLENGTH * 8) / config.ZOKRATES_PACKING_SIZE); // packets in bits
   logger.debug('amount: ', `${amount} : `, utils.hexToFieldPreserve(amount, p, 1));
-  logger.debug(
-    'publicKey: ',
-    ownerPublicKey,
-    ' : ',
-    utils.hexToFieldPreserve(ownerPublicKey, p, pt),
-  );
+  logger.debug('publicKey: ', zkpPublicKey, ' : ', utils.hexToFieldPreserve(zkpPublicKey, p, pt));
   logger.debug('salt: ', salt, ' : ', utils.hexToFieldPreserve(salt, p, pt));
 
   logger.debug('New Proof Variables:');
@@ -85,7 +80,7 @@ async function mint(amount, ownerPublicKey, salt, vkId, blockchainOptions, zokra
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
     new Element(amount, 'field', 128, 1),
-    new Element(ownerPublicKey, 'field'),
+    new Element(zkpPublicKey, 'field'),
     new Element(salt, 'field'),
     new Element(commitment, 'field'),
   ]);
@@ -168,8 +163,8 @@ async function mint(amount, ownerPublicKey, salt, vkId, blockchainOptions, zokra
  * @param {Array} inputCommitments - Array of two commitments owned by the sender.
  * @param {Array} outputCommitments - Array of two commitments.
  * Currently the first is sent to the receiverPublicKey, and the second is sent to the sender.
- * @param {String} receiverPublicKey - Public key of the first outputCommitment
- * @param {String} senderSecretKey
+ * @param {String} receiverZkpPublicKey - Receiver's Zkp Public Key
+ * @param {String} senderZkpPrivateKey - Private key of the sender's
  * @param {Object} blockchainOptions
  * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
@@ -180,8 +175,8 @@ async function mint(amount, ownerPublicKey, salt, vkId, blockchainOptions, zokra
 async function transfer(
   _inputCommitments,
   _outputCommitments,
-  receiverPublicKey,
-  senderSecretKey,
+  receiverZkpPublicKey,
+  senderZkpPrivateKey,
   vkId,
   blockchainOptions,
   zokratesOptions,
@@ -218,19 +213,19 @@ async function transfer(
     throw new Error(`Input commitments' values are too large`);
 
   // Calculate new arguments for the proof:
-  const senderPublicKey = utils.hash(senderSecretKey);
+  const senderPublicKey = utils.hash(senderZkpPrivateKey);
   inputCommitments[0].nullifier = utils.concatenateThenHash(
     inputCommitments[0].salt,
-    senderSecretKey,
+    senderZkpPrivateKey,
   );
   inputCommitments[1].nullifier = utils.concatenateThenHash(
     inputCommitments[1].salt,
-    senderSecretKey,
+    senderZkpPrivateKey,
   );
 
   outputCommitments[0].commitment = utils.concatenateThenHash(
     outputCommitments[0].value,
-    receiverPublicKey,
+    receiverZkpPublicKey,
     outputCommitments[0].salt,
   );
   outputCommitments[1].commitment = utils.concatenateThenHash(
@@ -308,7 +303,10 @@ async function transfer(
     )}`,
   );
   logger.debug(
-    `receiverPublicKey: ${receiverPublicKey} : ${utils.hexToFieldPreserve(receiverPublicKey, p)}`,
+    `receiverPublicKey: ${receiverZkpPublicKey} : ${utils.hexToFieldPreserve(
+      receiverZkpPublicKey,
+      p,
+    )}`,
   );
   logger.debug(
     `inputCommitments[0].salt: ${inputCommitments[0].salt} : ${utils.hexToFieldPreserve(
@@ -335,7 +333,7 @@ async function transfer(
     )}`,
   );
   logger.debug(
-    `senderSecretKey: ${senderSecretKey} : ${utils.hexToFieldPreserve(senderSecretKey, p)}`,
+    `senderSecretKey: ${senderZkpPrivateKey} : ${utils.hexToFieldPreserve(senderZkpPrivateKey, p)}`,
   );
   logger.debug(
     `inputCommitments[0].commitment: ${inputCommitments[0].commitment} : ${utils.hexToFieldPreserve(
@@ -400,7 +398,7 @@ async function transfer(
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
     new Element(inputCommitments[0].value, 'field', 128, 1),
-    new Element(senderSecretKey, 'field'),
+    new Element(senderZkpPrivateKey, 'field'),
     new Element(inputCommitments[0].salt, 'field'),
     ...inputCommitments[0].siblingPathElements.slice(1),
     new Element(inputCommitments[0].commitmentIndex, 'field', 128, 1), // the binary decomposition of a leafIndex gives its path's 'left-right' positions up the tree. The decomposition is done inside the circuit.,
@@ -411,7 +409,7 @@ async function transfer(
     new Element(inputCommitments[0].nullifier, 'field'),
     new Element(inputCommitments[1].nullifier, 'field'),
     new Element(outputCommitments[0].value, 'field', 128, 1),
-    new Element(receiverPublicKey, 'field'),
+    new Element(receiverZkpPublicKey, 'field'),
     new Element(outputCommitments[0].salt, 'field'),
     new Element(outputCommitments[0].commitment, 'field'),
     new Element(outputCommitments[1].value, 'field', 128, 1),
@@ -678,7 +676,7 @@ async function simpleFungibleBatchTransfer(
  * This function burns a commitment, i.e. it recovers ERC-20 into your
  * account. All values are hex strings.
  * @param {string} amount - the value of the commitment in hex (i.e. the amount you are burning)
- * @param {string} receiverSecretKey - the secret key of the person doing the burning (in hex)
+ * @param {string} receiverZkpPrivateKey - the secret key of the person doing the burning (in hex)
  * @param {string} salt - the random nonce used in the commitment
  * @param {string} commitment - the value of the commitment being burned
  * @param {string} commitmentIndex - the index of the commitment in the Merkle Tree
@@ -690,7 +688,7 @@ async function simpleFungibleBatchTransfer(
  */
 async function burn(
   amount,
-  receiverSecretKey,
+  receiverZkpPrivateKey,
   salt,
   commitment,
   commitmentIndex,
@@ -723,7 +721,7 @@ async function burn(
   const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
 
   // Calculate new arguments for the proof:
-  const nullifier = utils.concatenateThenHash(salt, receiverSecretKey);
+  const nullifier = utils.concatenateThenHash(salt, receiverZkpPrivateKey);
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
@@ -746,7 +744,10 @@ async function burn(
   const p = config.ZOKRATES_PACKING_SIZE;
   logger.debug(`amount: ${amount} : ${utils.hexToFieldPreserve(amount, p)}`);
   logger.debug(
-    `receiverSecretKey: ${receiverSecretKey} : ${utils.hexToFieldPreserve(receiverSecretKey, p)}`,
+    `receiverSecretKey: ${receiverZkpPrivateKey} : ${utils.hexToFieldPreserve(
+      receiverZkpPrivateKey,
+      p,
+    )}`,
   );
   logger.debug(`salt: ${salt} : ${utils.hexToFieldPreserve(salt, p)}`);
   logger.debug(`payTo: ${payTo} : ${utils.hexToFieldPreserve(payTo, p)}`);
@@ -775,7 +776,7 @@ async function burn(
     new Element(publicInputHash, 'field', 248, 1),
     new Element(payTo, 'field'),
     new Element(amount, 'field', 128, 1),
-    new Element(receiverSecretKey, 'field'),
+    new Element(receiverZkpPrivateKey, 'field'),
     new Element(salt, 'field'),
     ...siblingPathElements.slice(1),
     new Element(commitmentIndex, 'field', 128, 1), // the binary decomposition of a leafIndex gives its path's 'left-right' positions up the tree. The decomposition is done inside the circuit.,

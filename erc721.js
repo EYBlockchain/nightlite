@@ -19,7 +19,7 @@ const erc721Interface = require('./contracts/ERC721Interface.json');
 /**
  * Mint a commitment
  * @param {string} tokenId - the asset token
- * @param {string} ownerPublicKey - Address of the token owner
+ * @param {string} zkpPublicKey - ZKP public key, see README for more info
  * @param {string} salt - Alice's token serial number as a hex string
  * @param {Object} vkId - vkId for NFT's MintNFToken
  * @param {Object} blockchainOptions
@@ -36,7 +36,7 @@ const erc721Interface = require('./contracts/ERC721Interface.json');
  * @returns {String} commitment
  * @returns {Number} commitmentIndex - the index of the token within the Merkle Tree.  This is required for later transfers/joins so that Alice knows which 'chunks' of the Merkle Tree she needs to 'get' from the NFTokenShield contract in order to calculate a path.
  */
-async function mint(tokenId, ownerPublicKey, salt, vkId, blockchainOptions, zokratesOptions) {
+async function mint(tokenId, zkpPublicKey, salt, vkId, blockchainOptions, zokratesOptions) {
   const { nfTokenShieldJson, nfTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -59,7 +59,7 @@ async function mint(tokenId, ownerPublicKey, salt, vkId, blockchainOptions, zokr
   // Calculate new arguments for the proof:
   const commitment = utils.concatenateThenHash(
     utils.strip0x(tokenId).slice(-32 * 2),
-    ownerPublicKey,
+    zkpPublicKey,
     salt,
   );
 
@@ -70,9 +70,9 @@ async function mint(tokenId, ownerPublicKey, salt, vkId, blockchainOptions, zokr
   logger.debug('tokenId:', tokenId, ' : ', utils.hexToFieldPreserve(tokenId, p, pt));
   logger.debug(
     'ownerPublicKey:',
-    ownerPublicKey,
+    zkpPublicKey,
     ' : ',
-    utils.hexToFieldPreserve(ownerPublicKey, p, pt),
+    utils.hexToFieldPreserve(zkpPublicKey, p, pt),
   );
   logger.debug('salt:', salt, ' : ', utils.hexToFieldPreserve(salt, p, pt));
 
@@ -85,7 +85,7 @@ async function mint(tokenId, ownerPublicKey, salt, vkId, blockchainOptions, zokr
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
     new Element(tokenId, 'field'),
-    new Element(ownerPublicKey, 'field'),
+    new Element(zkpPublicKey, 'field'),
     new Element(salt, 'field'),
     new Element(commitment, 'field'),
   ]);
@@ -158,10 +158,10 @@ async function mint(tokenId, ownerPublicKey, salt, vkId, blockchainOptions, zokr
 /**
  * This function actually transfers a token, assuming that we have a proof.
  * @param {String} tokenId - the token's unique id (this is a full 256 bits)
- * @param {String} receiverPublicKey
+ * @param {String} receiverZkpPublicKey
  * @param {String} originalCommitmentSalt
  * @param {String} newCommitmentSalt
- * @param {String} senderSecretKey
+ * @param {String} senderZkpPrivateKey
  * @param {String} commitment - Commitment of token being sent
  * @param {Integer} commitmentIndex - the position of commitment in the on-chain Merkle Tree
  * @param {String} vkId
@@ -175,10 +175,10 @@ async function mint(tokenId, ownerPublicKey, salt, vkId, blockchainOptions, zokr
  */
 async function transfer(
   tokenId,
-  receiverPublicKey,
+  receiverZkpPublicKey,
   originalCommitmentSalt,
   newCommitmentSalt,
-  senderSecretKey,
+  senderZkpPrivateKey,
   commitment,
   commitmentIndex,
   vkId,
@@ -205,10 +205,10 @@ async function transfer(
   const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
 
   // Calculate new arguments for the proof:
-  const nullifier = utils.concatenateThenHash(originalCommitmentSalt, senderSecretKey);
+  const nullifier = utils.concatenateThenHash(originalCommitmentSalt, senderZkpPrivateKey);
   const outputCommitment = utils.concatenateThenHash(
     utils.strip0x(tokenId).slice(-config.LEAF_HASHLENGTH * 2),
-    receiverPublicKey,
+    receiverZkpPublicKey,
     newCommitmentSalt,
   );
 
@@ -247,15 +247,15 @@ async function transfer(
   );
   logger.debug(
     'senderSecretKey:',
-    senderSecretKey,
+    senderZkpPrivateKey,
     ':',
-    utils.hexToFieldPreserve(senderSecretKey, p, pt),
+    utils.hexToFieldPreserve(senderZkpPrivateKey, p, pt),
   );
   logger.debug(
     'receiverPublicKey:',
-    receiverPublicKey,
+    receiverZkpPublicKey,
     ':',
-    utils.hexToFieldPreserve(receiverPublicKey, p, pt),
+    utils.hexToFieldPreserve(receiverZkpPublicKey, p, pt),
   );
   logger.debug('inputCommitment:', commitment, ':', utils.hexToFieldPreserve(commitment, p, pt));
 
@@ -280,10 +280,10 @@ async function transfer(
     ...siblingPathElements.slice(1),
     new Element(commitmentIndex, 'field', 128, 1), // the binary decomposition of a leafIndex gives its path's 'left-right' positions up the tree. The decomposition is done inside the circuit.
     new Element(nullifier, 'field'),
-    new Element(receiverPublicKey, 'field'),
+    new Element(receiverZkpPublicKey, 'field'),
     new Element(originalCommitmentSalt, 'field'),
     new Element(newCommitmentSalt, 'field'),
-    new Element(senderSecretKey, 'field'),
+    new Element(senderZkpPrivateKey, 'field'),
     new Element(root, 'field'),
     new Element(outputCommitment, 'field'),
   ]);
@@ -348,7 +348,7 @@ async function transfer(
 /**
  * Burns a commitment and returns the token balance to blockchainOptions.tokenReceiver
  * @param {String} tokenId - ID of token
- * @param {String} secretKey
+ * @param {String} receiverZkpPrivateKey
  * @param {String} salt - salt of token
  * @param {String} commitment
  * @param {String} commitmentIndex
@@ -360,7 +360,7 @@ async function transfer(
  */
 async function burn(
   tokenId,
-  secretKey,
+  receiverZkpPrivateKey,
   salt,
   commitment,
   commitmentIndex,
@@ -389,7 +389,7 @@ async function burn(
   const payToOrDefault = payTo || account; // have the option to pay out to another address
   logger.debug('\nIN BURN...');
   logger.debug('tokenId', tokenId);
-  logger.debug('secretKey', secretKey);
+  logger.debug('secretKey', receiverZkpPrivateKey);
   logger.debug('salt', salt);
   logger.debug('commitment', commitment);
   logger.debug('commitmentIndex', commitmentIndex);
@@ -397,7 +397,7 @@ async function burn(
   logger.debug('payTo', payToOrDefault);
 
   // Calculate new arguments for the proof:
-  const nullifier = utils.concatenateThenHash(salt, secretKey);
+  const nullifier = utils.concatenateThenHash(salt, receiverZkpPrivateKey);
 
   // Get the sibling-path from the token commitment (leaf) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
@@ -420,7 +420,13 @@ async function burn(
   const p = config.ZOKRATES_PACKING_SIZE;
   const pt = Math.ceil((config.LEAF_HASHLENGTH * 8) / config.ZOKRATES_PACKING_SIZE);
   logger.debug(`tokenId: ${tokenId} : ${utils.hexToFieldPreserve(tokenId, p, pt)}`);
-  logger.debug(`secretKey: ${secretKey} : ${utils.hexToFieldPreserve(secretKey, p, pt)}`);
+  logger.debug(
+    `secretKey: ${receiverZkpPrivateKey} : ${utils.hexToFieldPreserve(
+      receiverZkpPrivateKey,
+      p,
+      pt,
+    )}`,
+  );
   logger.debug(`salt: ${salt} : ${utils.hexToFieldPreserve(salt, p, pt)}`);
   logger.debug(`commitment: ${commitment} : ${utils.hexToFieldPreserve(commitment, p, pt)}`);
   logger.debug(`payTo: ${payToOrDefault}`);
@@ -440,7 +446,7 @@ async function burn(
     new Element(publicInputHash, 'field', 248, 1),
     new Element(payTo, 'field'),
     new Element(tokenId, 'field'),
-    new Element(secretKey, 'field'),
+    new Element(receiverZkpPrivateKey, 'field'),
     new Element(salt, 'field'),
     ...siblingPathElements.slice(1),
     commitmentIndexElement,
