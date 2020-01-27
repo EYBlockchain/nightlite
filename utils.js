@@ -451,7 +451,7 @@ function concatenateThenHash(...items) {
  * function to generate a promise that resolves to a string of hex
  * @param {int} bytes - the number of bytes of hex that should be returned
  */
-function rndHex(bytes) {
+function randomHex(bytes) {
   return new Promise((resolve, reject) => {
     crypto.randomBytes(bytes, (err, buf) => {
       if (err) reject(err);
@@ -569,7 +569,7 @@ module.exports = {
   splitHexToBitsN,
   splitAndPadBitsN,
   leftPadBitsN,
-  rndHex,
+  randomHex,
   flattenDeep,
   padHex,
   leftPadHex,
