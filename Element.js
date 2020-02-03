@@ -1,4 +1,4 @@
-const config = require('./config');
+const config = require('config');
 const utils = require('./utils');
 
 /**
@@ -8,17 +8,17 @@ We are now potentially using different encoding for each of the elements and for
 @author Westlad, iAmMichaelConnor
 */
 class Element {
-  constructor(_hex, encoding, packingSize, packets) {
-    const hex = _hex.toString(16);
-    const allowedEncoding = ['bits', 'bytes', 'field'];
+  constructor(hex, encoding, packingSize, packets) {
+    const allowedEncoding = ['bits', 'bytes', 'field', 'scalar'];
 
     if (!allowedEncoding.includes(encoding))
       throw new Error('Element encoding must be one of:', allowedEncoding);
 
-    if (hex === undefined) throw new Error('Hex string was undefined');
-    if (hex === '') throw new Error('Hex string was empty');
-
-    this.hex = utils.ensure0x(hex);
+    if (hex === undefined) throw new Error('input was undefined');
+    if (hex === '') throw new Error('input was empty');
+    if (encoding === undefined) throw new Error('An encoding must be specified');
+    // eslint-disable-next-line valid-typeof
+    this.hex = typeof hex === 'bigint' ? hex : utils.ensure0x(hex);
     this.encoding = encoding;
     if (encoding === 'field') {
       this.packingSize = packingSize || config.ZOKRATES_PACKING_SIZE;

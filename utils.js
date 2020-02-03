@@ -602,7 +602,13 @@ function formatInputsForZkSnark(elements) {
         // each vector element will be a 'decimal representation' of integers modulo a prime. p=21888242871839275222246405745257275088548364400416034343698204186575808495617 (roughly = 2*10e76 or = 2^254)
         a = a.concat(hexToFieldPreserve(element.hex, element.packingSize, element.packets, 1));
         break;
-
+      case 'scalar':
+        // this copes with a decimal (BigInt) field element, that needs no conversion
+        // eslint-disable-next-line valid-typeof
+        if (typeof element.hex !== 'bigint')
+          throw new Error(`scalar ${element.hex} is not of type BigInt`);
+        a = a.concat(element.hex.toString(10));
+        break;
       default:
         throw new Error('Encoding type not recognised');
     }

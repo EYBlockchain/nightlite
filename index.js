@@ -5,6 +5,7 @@ const vks = require('./vks');
 const erc20 = require('./erc20');
 const erc721 = require('./erc721');
 const utils = require('./utils');
+const elgamal = require('./elgamal');
 
 module.exports = {
   generateZokratesFiles,
@@ -14,4 +15,5 @@ module.exports = {
   erc20,
   erc721,
   utils,
+  elgamal,
 };

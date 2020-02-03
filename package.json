@@ -12,7 +12,7 @@
     "lint:md": "markdownlint -i node_modules -i build .",
     "validate": "cod-scripts validate",
     "lint:sol": "solium -d contracts",
-    "test": "docker-compose exec zkp jest --verbose --runInBand --forceExit ./__tests__/*.test.js"
+    "test": "docker-compose exec zkp jest --verbose --runInBand ./__tests__/*.test.js"
   },
   "devDependencies": {
     "cod-scripts": "^3.3.0",
