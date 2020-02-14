@@ -2,12 +2,13 @@
 functions to support El-Gamal encryption over a BabyJubJub curve
 */
 
+const { squareRootModPrime, addMod, mulMod } = require('./number-theory');
 const { BABYJUBJUB, ZOKRATES_PRIME, TEST_PRIVATE_KEYS } = require('./config');
-const { modDivide } = require('./modular-division');
+const { modDivide } = require('./modular-division'); // TODO REPLACE WITH NPM VERSION
 const utils = require('./utils');
 
 const one = BigInt(1);
-const { JUBJUBE, JUBJUBC, GENERATOR } = BABYJUBJUB;
+const { JUBJUBE, JUBJUBC, JUBJUBD, JUBJUBA, GENERATOR } = BABYJUBJUB;
 const Fp = BigInt(ZOKRATES_PRIME); // the prime field used with the curve E(Fp)
 const Fq = JUBJUBE / JUBJUBC;
 const AUTHORITY_PRIVATE_KEYS = [];
@@ -152,6 +153,53 @@ function* rangeGenerator(max) {
   for (let i = 0; i < max; i++) yield i;
 }
 
+/** A useful function that takes a curve point and throws away the x coordinate
+retaining only the y coordinate and the odd/eveness of the x coordinate (plays the
+part of a sign in mod arithmetic with a prime field).  This loses no information
+because we know the curve that relates x to y and the odd/eveness disabiguates the two
+possible solutions. So it's a useful data compression.
+TODO - probably simpler to use integer arithmetic rather than binary manipulations
+*/
+function edwardsCompress(p) {
+  const px = p[0];
+  const py = p[1];
+  const xBits = px.toString(2).padStart(256, '0');
+  const yBits = py.toString(2).padStart(256, '0');
+  const sign = xBits[255] === '1' ? '1' : '0';
+  const yBitsC = sign.concat(yBits.slice(1)); // add in the sign bit
+  const y = utils.ensure0x(
+    BigInt('0b'.concat(yBitsC))
+      .toString(16)
+      .padStart(64, '0'),
+  ); // put yBits into hex
+  return y;
+}
+
+function edwardsDecompress(y) {
+  const py = BigInt(y)
+    .toString(2)
+    .padStart(256, '0');
+  const sign = py[0];
+  const yfield = BigInt(`0b${py.slice(1)}`); // remove the sign encoding
+  if (yfield > ZOKRATES_PRIME || yfield < 0)
+    throw new Error(`y cordinate ${yfield} is not a field element`);
+  // 168700.x^2 + y^2 = 1 + 168696.x^2.y^2
+  const y2 = mulMod([yfield, yfield]);
+  const x2 = modDivide(
+    addMod([y2, BigInt(-1)]),
+    addMod([mulMod([JUBJUBD, y2]), -JUBJUBA]),
+    ZOKRATES_PRIME,
+  );
+  let xfield = squareRootModPrime(x2);
+  const px = BigInt(xfield)
+    .toString(2)
+    .padStart(256, '0');
+  if (px[255] !== sign) xfield = ZOKRATES_PRIME - xfield;
+  const p = [xfield, yfield];
+  if (!isOnCurve(p)) throw new Error('The computed point was not on the Babyjubjub curve');
+  return p;
+}
+
 module.exports = {
   rangeGenerator,
   bruteForce,
@@ -161,4 +209,6 @@ module.exports = {
   AUTHORITY_PUBLIC_KEYS,
   scalarMult,
   add,
+  edwardsCompress,
+  edwardsDecompress,
 };
