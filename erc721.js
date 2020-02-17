@@ -5,7 +5,7 @@
  * @module erc721.js
  * @author westlad, Chaitanya-Konda, iAmMichaelConnor
  */
-const contract = require('@truffle/contract');
+const contract = require('truffle-contract');
 const zokrates = require('@eyblockchain/zokrates.js');
 const fs = require('fs');
 const config = require('./config');
