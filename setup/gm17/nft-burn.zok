@@ -1,25 +1,47 @@
 import "hashes/sha256/1536bit.code" as sha256of1536
 import "hashes/sha256/1024bit.code" as sha256of1024
 import "hashes/sha256/512bit.code" as sha256of512
-
-import "./common/concat/concatenate256x256.zok" as concatenate256x256
-import "./common/concat/concatenate3x256.zok" as concatenate3x256
-import "./common/concat/concatenate4x256.zok" as concatenate4x256
-import "./common/concat/concatenate5x256.zok" as concatenate5x256
-
 import "utils/pack/unpack128.code" as unpack128
 import "utils/pack/nonStrictUnpack256.code" as unpack256
-import "./common/packing/unpack2x128To256.zok" as unpack2x128To256
 
-import "./common/hashes/sha256/padding/shaPad256To512.zok" as shaPad256To512
-import "./common/hashes/sha256/padding/shaPad432To512.zok" as shaPad432To512
-import "./common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
-import "./common/hashes/sha256/padding/shaPad640To1024" as shaPad640To1024
-import "./common/hashes/sha256/padding/shaPad768To1024" as shaPad768To1024
-import "./common/hashes/sha256/padding/shaPad1024To1536" as shaPad1024To1536
-import "./common/hashes/sha256/padding/shaPad1280To1536" as shaPad1280To1536
+def concatenate256x256x256x256(field[256] a, field[256] b, field[256] c, field[256] d)->(field[1024]):
+	return [...a, ...b, ...c, ...d]
 
-import "./common/merkle-tree/sha-root.zok" as sharoot
+def concatenate256x256x256(field[256] a, field[256] b, field[256] c)->(field[768]):
+	return [...a, ...b, ...c]
+
+def concatenate256x256(field[256] a, field[256] b)->(field[512]):
+	return [...a, ...b]
+
+def orderedConcatenate216x216(field order, field[216] pathNode, field[216] siblingNode)->(field[432]):
+	field[216] left = if order==0 then pathNode else siblingNode fi
+	field[216] right = if order==0 then siblingNode else pathNode fi
+	return [...left, ...right]
+
+def shaPad432To512(field[432] a)->(field[512]):
+	return [...a, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,1,0,1,1,0,0,0,0]
+
+// Provides the padding (only!) for a 256-bit message.
+def shaPad256To512()->(field[256]):
+	return [1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0]
+
+// Provides the padding (only!) for a 512-bit message.
+def shaPad512To1024()->(field[512]):
+	return [1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,  0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0]
+
+// Provides the padding (only!) for a 768-bit message.
+def shaPad768To1024()->(field[256]):
+	return [1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	1,	0,	0,	0,	0,	0,	0,	0,	0]
+
+// Provides the padding (only!) for a 1024-bit message.
+def shaPad1024To1536()->(field[512]):
+	return [1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,  0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	1,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0]
+
+// unpacks a siblingPath's node to bits, ready for sha-ing:
+def unpackSiblingNode(field siblingNode)->(field[216]):
+	field[256] siblingNodeBits = unpack256(siblingNode)
+	return siblingNodeBits[40..256]
+
 
 // Inputs for main are:
 
@@ -37,13 +59,11 @@ import "./common/merkle-tree/sha-root.zok" as sharoot
 
 // Each field element passed to main() can be at most 128bits, to make use of unpack128() so most variables occupy two fields (except the publicInputHash, which we maximize as 248-bits)
 
-def main(field publicInputHash, private field contractAddress, private field payToHigh, private field payToLow, private field assetHigh, private field assetLow, private field  secretKeyHigh, private field secretKeyLow, private field saltHigh, private field  saltLow, private field[32] siblingPath, private field order, private field nullifierHigh, private field nullifierLow, private field rootHigh, private field rootLow)->():
+def main(field publicInputHash, private field payToHigh, private field payToLow, private field assetHigh, private field assetLow, private field  secretKeyHigh, private field secretKeyLow, private field saltHigh, private field  saltLow, private field[32] siblingPath, private field order, private field nullifierHigh, private field nullifierLow, private field rootHigh, private field rootLow)->():
 
 	//Unpack the inputs of main() to 128 bits. We'll unpack each field to its own 128 bit string for simplicity for now. Later efficiencies could be made by grouping some inputs.
 
 	field[256] publicInputHashBits = unpack256(publicInputHash)
-
-	field[256] contractAddressBits = unpack256(contractAddress)
 
 	field[128] payToHighBits = unpack128(payToHigh)
 	field[128] payToLowBits = unpack128(payToLow)
@@ -69,13 +89,21 @@ def main(field publicInputHash, private field contractAddress, private field pay
 	field[128] rootLowBits = unpack128(rootLow)
 	field[256] rootBits = [...rootHighBits, ...rootLowBits]
 
+	field[128] orderBits = unpack128(order)
+
+
+	field[256] padding256To512 = shaPad256To512()
+	field[512] padding512To1024 = shaPad512To1024()
+	field[256] padding768To1024 = shaPad768To1024()
+	field[512] padding1024To1536 = shaPad1024To1536()
+
 
 	// First we construct a proof that the nullifier is correct.
 	// Concatenate salt|secretKey.
 
 	field[512] preimage512 = concatenate256x256(saltBits, secretKeyBits)
-	field[1024] nullifierPadded = shaPad512To1024(preimage512)
-	field[256] nullifierBitsCheck = sha256of1024(nullifierPadded[0..256], nullifierPadded[256..512], nullifierPadded[512..768], nullifierPadded[768..1024])
+
+	field[256] nullifierBitsCheck = sha256of1024(preimage512[0..256], preimage512[256..512], padding512To1024[0..256], padding512To1024[256..512])
 
 
 
@@ -83,20 +111,22 @@ def main(field publicInputHash, private field contractAddress, private field pay
 
 	// First, calculate Alice's public key from her private key: publicKey = H(secretKey).
 
-	field[512] secretKeyPadded = shaPad256To512(secretKeyBits)
-	field[256] publicKeyBits = sha256of512(secretKeyPadded[0..256], secretKeyPadded[256..512])
+	field[256] publicKeyBits = sha256of512(secretKeyBits, padding256To512)
 
 
-	// Next calculate the commitment = H(contractAddress|asset|publicKey|salt)
+	// Next calculate the commitment = H(asset|publicKey|salt)
 
-	field[1024] commitmentPreImage = concatenate4x256(contractAddressBits, assetBits, publicKeyBits, saltBits)
-	field[1536] commitmentPadded = shaPad1024To1536(commitmentPreImage)
+	field[768] preimage768 = concatenate256x256x256(assetBits, publicKeyBits, saltBits)
 
-	field[256] hash = sha256of1536(commitmentPadded[0..256], commitmentPadded[256..512], commitmentPadded[512..768], commitmentPadded[768..1024], commitmentPadded[1024..1280], commitmentPadded[1280..1536]) // commitment
+	field[256] hash = sha256of1024(preimage768[0..256], preimage768[256..512], preimage768[512..768], padding768To1024) // commitment
 
 	// concatenate siblings and hash all the way up to the root:
-	hash = sharoot(siblingPath, order, hash)
-
+	for field i in 0..32 do
+		field j = 31-i
+		field k = 127-i
+		preimage512 = shaPad432To512(orderedConcatenate216x216(orderBits[k], hash[40..256], unpackSiblingNode(siblingPath[j])))
+		hash = sha256of512(preimage512[0..256], preimage512[256..512])
+  endfor
 	// save the computed root:
 	field[256] rootBitsCheck = hash
 
@@ -109,10 +139,9 @@ def main(field publicInputHash, private field contractAddress, private field pay
 	// Check that the 'public inputs' hash to the publicInputHash:
 	// (This also intertwines the 'payTo' input into the proof)
 
-	field[1280] preimage1280 = concatenate5x256(contractAddressBits, rootBits, nullifierBits, assetBits, payToBits)
+	field[1024] preimage1024 = concatenate256x256x256x256(rootBits, nullifierBits, assetBits, payToBits)
 
-	field[1536] publicInputPadded = shaPad1280To1536(preimage1280)
-	field[256] publicInputHashBitsCheck = sha256of1536(publicInputPadded[0..256], publicInputPadded[256..512], publicInputPadded[512..768], publicInputPadded[768..1024], publicInputPadded[1024..1280], publicInputPadded[1280..1536])
+	field[256] publicInputHashBitsCheck = sha256of1536(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024], padding1024To1536[0..256], padding1024To1536[256..512])
 
 	publicInputHashBits[8..256] == publicInputHashBitsCheck[8..256]
 

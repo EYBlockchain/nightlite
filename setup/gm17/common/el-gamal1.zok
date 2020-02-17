@@ -1,0 +1,26 @@
+import "ecc/babyjubjubParams.code" as curveParams
+import "ecc/edwardsScalarMult.code" as scalarMult
+import "ecc/edwardsAdd.code" as add
+import "utils/pack/nonStrictUnpack256.zok" as unpack256
+
+//* This function encrypts the sender's public key (so that the authority can recover it)
+//* using El-Gamal encryption.  It can work with 256 bit messages (>Fq) because the ZoKrates scalarMult function
+//* supports this (the number can wrap around the group) [TODO - double check this is ok]
+def main(field[256] pkA, field[2] authorityPublicKey1, field randomSecret )->(field[4]):
+  field[256] randomSecretBits = unpack256(randomSecret)
+  // We can only encrypt curve points.  Unfortunately, we have binary messages.  Luckily, we can map one to the other with a scalar multiplication:
+  field[10] cp = curveParams()
+  field[2] g = cp[4..6]
+  field[2] message1 = scalarMult(pkA, g, cp)
+  // next, we compute shared secrets using a random number and our public keys. It might seem more
+  // natural to use different random numbers and a single public key but the computation is slightly
+  // more efficient if we do it this way around (be sure to choose a different random each time
+  // this encryption function is called however - knowing the shared secret is the same for two encryptions
+  // is valuable for an attacker)
+	field[2] sharedSecret1 = scalarMult(randomSecretBits, authorityPublicKey1, cp)
+
+	//these are the elements that make up the encryption
+	field[2] c0 = scalarMult(randomSecretBits, g, cp) // = g.r
+  field[2] c1 = add(message1, sharedSecret1, cp)
+
+	return [...c0, ...c1]

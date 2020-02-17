@@ -5,7 +5,7 @@
 rest api calls, and the heavy-lifitng token-zkp.js and zokrates.js.  It exists so that the amount of logic in restapi.js is absolutely minimised.
 */
 
-const contract = require('truffle-contract');
+const contract = require('@truffle/contract');
 const jsonfile = require('jsonfile');
 const config = require('./config');
 const utils = require('./utils');

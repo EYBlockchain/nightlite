@@ -1,0 +1,6 @@
+// code to swap over two hashes depending on the value of 'order'
+//this is useful for evaluating a Merkle path.
+def main(field order, field pathNode, field siblingNode)->(field[2]):
+	field left = if order == 0 then pathNode else siblingNode fi
+	field right = if order == 0 then siblingNode else pathNode fi
+	return [left, right]
