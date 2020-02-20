@@ -1,0 +1,6 @@
+[
+  {
+    "files": "**/*",
+    "command": "yalc push"
+  }
+]

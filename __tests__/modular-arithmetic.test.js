@@ -14,6 +14,7 @@ describe('Edwards compression tests', () => {
     // then, turn them into curve points
     const points = scalars.map(s => scalarMult(s, BABYJUBJUB.GENERATOR));
     // compress them, decompress them and see if we get the same points back
+    // remember, points mean prizes.
     const compressed = points.map(p => edwardsCompress(p));
     const decompressed = compressed.map(e => edwardsDecompress(e));
     expect(points).toEqual(decompressed);
