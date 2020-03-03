@@ -168,7 +168,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   logger.debug('Mint output: [zA, zAIndex]:', commitment, commitmentIndex.toString());
   logger.debug('MINT COMPLETE\n');
 
-  return { commitment, commitmentIndex };
+  return { commitment, commitmentIndex, txReceipt };
 }
 
 /**
