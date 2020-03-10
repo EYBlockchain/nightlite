@@ -79,7 +79,7 @@ async function generateZokratesFiles(outputDirectory, codeName) {
     ? outputDirectory
     : `${outputDirectory}/`;
 
-  let hashDir = process.env.ENABLE_REGULATORY_COMPLIANCE === 'true' ? '/rc' : '';
+  let hashDir = process.env.COMPLIANCE === 'true' ? '/rc' : '';
   hashDir = process.env.HASH_TYPE === 'mimc' ? '/mimc' : hashDir;
 
   // Path to code files within this module.

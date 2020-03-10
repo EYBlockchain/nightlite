@@ -10,7 +10,7 @@ const elgamal = require('./elgamal');
 
 // Do we want regulatory compliance?  It's not avaiable with MiMC yet
 let erc20 = erc20n;
-if (process.env.ENABLE_REGULATORY_COMPLIANCE === 'true') {
+if (process.env.COMPLIANCE === 'true') {
   if (process.env.HASH_TYPE === 'mimc')
     throw new Error('Regulatory Compliance version does not yet support a MiMC hash');
   erc20 = erc20rc;

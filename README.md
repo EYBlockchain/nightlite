@@ -82,6 +82,10 @@ application. It will automatically set up the correct files for you. Take a look
 [Nightfall](https://github.com/EYBlockchain/nightfall/tree/master/zkp) `zkp/README` for more
 information.
 
+Similarly, you can set the COMPLIANCE environment variable to 'true'. This will set up the code to
+work with the circuits in `setup/gm17/rc`, which will enable blacklisting of users and decryption of
+transactions.
+
 The Trusted Setup step will take approximately one hour. The Trusted Setup step will need to be
 re-run for a given .zok file whenever it is changed or whenever you change `HASH_TYPE`.
 
