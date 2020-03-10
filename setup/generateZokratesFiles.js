@@ -79,7 +79,8 @@ async function generateZokratesFiles(outputDirectory, codeName) {
     ? outputDirectory
     : `${outputDirectory}/`;
 
-  const hashDir = process.env.HASH_TYPE === 'mimc' ? '/mimc' : '';
+  let hashDir = process.env.ENABLE_REGULATORY_COMPLIANCE === 'true' ? '/rc' : '';
+  hashDir = process.env.HASH_TYPE === 'mimc' ? '/mimc' : hashDir;
 
   // Path to code files within this module.
   const gm17Path = path.join(__dirname, `./gm17`, hashDir);
@@ -103,7 +104,7 @@ async function generateZokratesFiles(outputDirectory, codeName) {
     try {
       await mkdir(codeFileDirectory);
     } catch (err) {
-      logger.error('Directory already existed, skipping creation');
+      logger.warn('Directory already exists, skipping creation');
     }
 
     // Create files

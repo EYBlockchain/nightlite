@@ -1,0 +1,71 @@
+import "hashes/sha256/1024bit.code" as sha256of1024
+import "hashes/sha256/512bit.code" as sha256of512
+import "hashes/sha256/1536bit.code" as sha256of1536
+
+import "./common/concat/concatenate256x256.zok" as concatenate256x256
+import "./common/concat/concatenate3x256.zok" as concatenate3x256
+import "./common/concat/concatenate4x256.zok" as concatenate4x256
+
+import "utils/pack/unpack128.code" as unpack128
+import "utils/pack/nonStrictUnpack256.code" as unpack256
+
+import "./common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
+import "./common/hashes/sha256/padding/shaPad768To1024" as shaPad768To1024
+import "./common/hashes/sha256/padding/shaPad1024To1536" as shaPad1024To1536
+
+// Inputs for main are:
+// - asset - is the ERC-721 tokenId for the asset
+// - salt (private) is the salt for the commitment
+// - publicKey (private) is the public key of Alice derived by hashing the secretKey of Alice
+// - commitment - is the public commitment
+// - publicInputHash = hash(asset, commitment)
+
+// Each field element passed to main() can be at most 128bits, to make use of unpack128() so most variables occupy two fields (except the publicInputHash, which we maximize as 248-bits)
+
+
+def main(field publicInputHash, private field contractAddress, private field assetHigh, private field assetLow, private field publicKeyHigh, private field publicKeyLow, private field saltHigh, private field saltLow, private field commitmentHigh, private field commitmentLow)->():
+
+	// Unpack the inputs of main() to 128 bits. We'll unpack each field to its own 128 bit string for simplicity for now. Later efficiencies could be made by grouping some inputs.
+
+	field[256] publicInputHashBits = unpack256(publicInputHash)
+
+	field[256] contractAddressBits = unpack256(contractAddress)
+
+	field[128] assetHighBits = unpack128(assetHigh)
+	field[128] assetLowBits = unpack128(assetLow)
+	field[256] assetBits = [...assetHighBits, ...assetLowBits]
+
+	field[128] saltHighBits = unpack128(saltHigh)
+	field[128] saltLowBits = unpack128(saltLow)
+	field[256] saltBits = [...saltHighBits, ...saltLowBits]
+
+	field[128] publicKeyHighBits = unpack128(publicKeyHigh)
+	field[128] publicKeyLowBits = unpack128(publicKeyLow)
+	field[256] publicKeyBits = [...publicKeyHighBits, ...publicKeyLowBits]
+
+	field[128] commitmentHighBits = unpack128(commitmentHigh)
+	field[128] commitmentLowBits = unpack128(commitmentLow)
+	field[256] commitmentBits = [...commitmentHighBits, ...commitmentLowBits]
+
+	// Compute commitment = H(contractAddress|asset|publicKey|salt):
+	field[1024] preimage1024 = concatenate4x256(contractAddressBits, assetBits, publicKeyBits, saltBits)
+	field[1536] commitmentPadded = shaPad1024To1536(preimage1024)
+
+	field[256] commitmentBitsCheck = sha256of1536(commitmentPadded[0..256], commitmentPadded[256..512], commitmentPadded[512..768], commitmentPadded[768..1024], commitmentPadded[1024..1280], commitmentPadded[1280..1536])
+
+
+	// This checks if the hash commitmentBitsCheck we computed using 'asset' (which is H(contractAddress|asset|publicKey|salt)) is equal to the input commitment:
+	commitmentBits == commitmentBitsCheck
+
+
+	// Check that the 'public inputs' hash to the publicInputHash:
+	// Public input hash is H(contractAddress|asset|commitment)
+	field[768] preimage768 = concatenate3x256(contractAddressBits, assetBits, commitmentBits)
+	field[1024] publicInputHashPadded = shaPad768To1024(preimage768)
+
+	field[256] publicInputHashBitsCheck = sha256of1024(publicInputHashPadded[0..256], publicInputHashPadded[256..512], publicInputHashPadded[512..768], publicInputHashPadded[768..1024])
+
+	publicInputHashBits[8..256] == publicInputHashBitsCheck[8..256]
+
+
+	return

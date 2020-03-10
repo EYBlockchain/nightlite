@@ -3,12 +3,12 @@ import "hashes/sha256/1024bit.code" as sha256of1024
 import "hashes/sha256/512bit.code" as sha256of512
 import "utils/pack/unpack128.code" as unpack128
 import "utils/pack/nonStrictUnpack256.code" as unpack256
-import "../common/el-gamal3.zok" as enc3
+import "../common/encryption/el-gamal3.zok" as enc3
 import "hashes/sha256/IVconstants.code" as IVconstants
 import "hashes/sha256/shaRoundNoBoolCheck.code" as sha256
-import "../common/order-fields.zok" as orderFields
-import "../common/mimc-hash-2.zok" as mimc2
-import "../common/edwards-compress.zok" as edwardsCompress
+import "../common/merkle-tree/order-fields.zok" as orderFields
+import "../common/hashes/mimc/mimc-hash-2.zok" as mimc2
+import "../common/encryption/edwards-compress.zok" as edwardsCompress
 import "utils/pack/pack256.code" as pack256
 
 def concatenate128x256x256(field[128] a, field[256] b, field[256] c)->(field[640]):
