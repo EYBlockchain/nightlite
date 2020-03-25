@@ -101,11 +101,12 @@ function decryptTransaction(txReceipt, { type, guessers }) {
 }
 
 /**
- * Mint a coin
+ * Mint a coin under compliance conditions
  * @param {String} amount - the value of the coin
  * @param {String} zkpPublicKey - Alice's public key
  * @param {String} salt - Alice's token serial number as a hex string
  * @param {Object} blockchainOptions
+ * @param {String} blockchainOptions.erc20Address - Address of ERC20 contract
  * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
@@ -113,9 +114,10 @@ function decryptTransaction(txReceipt, { type, guessers }) {
  * @returns {Number} commitmentIndex
  */
 async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptions) {
-  const { fTokenShieldJson, fTokenShieldAddress } = blockchainOptions;
+  const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
+  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
-
+  logger.debug('erc20Address', erc20Address);
   logger.debug('zokratesOptions', zokratesOptions);
   const {
     codePath,
@@ -136,11 +138,17 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
   // Calculate new arguments for the proof:
-  const commitment = utils.concatenateThenHash(amount, zkpPublicKey, salt);
+  const commitment = utils.concatenateThenHash(erc20AddressPadded, amount, zkpPublicKey, salt);
 
   logger.debug('Existing Proof Variables:');
   const p = config.ZOKRATES_PACKING_SIZE;
   const pt = Math.ceil((config.LEAF_HASHLENGTH * 8) / config.ZOKRATES_PACKING_SIZE); // packets in bits
+  logger.debug(
+    'erc20AddressPadded',
+    erc20AddressPadded,
+    ' : ',
+    utils.hexToFieldPreserve(erc20AddressPadded, 248, 1),
+  );
   logger.debug('amount: ', `${amount} : `, utils.hexToFieldPreserve(amount, p, 1));
   logger.debug('publicKey: ', zkpPublicKey, ' : ', utils.hexToFieldPreserve(zkpPublicKey, p, pt));
   logger.debug('salt: ', salt, ' : ', utils.hexToFieldPreserve(salt, p, pt));
@@ -148,7 +156,12 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   logger.debug('New Proof Variables:');
   logger.debug('commitment: ', commitment, ' : ', utils.hexToFieldPreserve(commitment, p, pt));
 
-  const publicInputHash = utils.concatenateThenHash(amount, commitment, zkpPublicKey);
+  const publicInputHash = utils.concatenateThenHash(
+    erc20AddressPadded,
+    amount,
+    commitment,
+    zkpPublicKey,
+  );
   logger.debug(
     'publicInputHash:',
     publicInputHash,
@@ -161,6 +174,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
+    new Element(erc20AddressPadded, 'field', 248, 1),
     new Element(amount, 'field', 128, 1),
     new Element(zkpPublicKey, 'field'),
     new Element(salt, 'field'),
@@ -192,8 +206,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   // Approve fTokenShieldInstance to take tokens from minter's account.
   const fToken = contract(erc20Interface);
   fToken.setProvider(Web3.connect());
-  const fTokenAddress = await fTokenShieldInstance.getFToken.call();
-  const fTokenInstance = await fToken.at(fTokenAddress);
+  const fTokenInstance = await fToken.at(erc20Address);
 
   await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
     from: account,
@@ -214,7 +227,8 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
 
   // Mint the commitment
   logger.debug('Approving ERC-20 spend from: ', fTokenShieldInstance.address);
-  const txReceipt = await fTokenShieldInstance.mint(
+  const txReceipt = await fTokenShieldInstance.mintRC(
+    erc20AddressPadded,
     proof,
     publicInputs,
     amount,
@@ -246,13 +260,14 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
 }
 
 /**
- * This function actually transfers a coin.
+ * This function actually transfers a coin with compliance features
  * @param {Array} inputCommitments - Array of two commitments owned by the sender.
  * @param {Array} outputCommitments - Array of two commitments.
  * Currently the first is sent to the receiverPublicKey, and the second is sent to the sender.
  * @param {String} receiverPublicKey - Public key of the first outputCommitment
  * @param {String} senderSecretKey
  * @param {Object} blockchainOptions
+ * @param {String} blockchainOptions.erc20Address - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
@@ -267,7 +282,8 @@ async function transfer(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const { fTokenShieldJson, fTokenShieldAddress } = blockchainOptions;
+  const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
+  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
   const {
@@ -310,11 +326,13 @@ async function transfer(
   );
 
   outputCommitments[0].commitment = utils.concatenateThenHash(
+    erc20AddressPadded,
     outputCommitments[0].value,
     receiverPublicKey,
     outputCommitments[0].salt,
   );
   outputCommitments[1].commitment = utils.concatenateThenHash(
+    erc20AddressPadded,
     outputCommitments[1].value,
     senderPublicKey,
     outputCommitments[1].salt,
@@ -502,6 +520,7 @@ async function transfer(
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
+    new Element(erc20AddressPadded, 'field', 248, 1),
     new Element(inputCommitments[0].value, 'field', 128, 1),
     new Element(senderSecretKey, 'field'),
     new Element(inputCommitments[0].salt, 'field'),
@@ -557,7 +576,7 @@ async function transfer(
   logger.debug(proof);
 
   // Transfers commitment
-  const txReceipt = await fTokenShieldInstance.transfer(
+  const txReceipt = await fTokenShieldInstance.transferRC(
     proof,
     utils.formatInputsForZkSnark([new Element(publicInputHash, 'field', 248, 1)]),
     compressedPublicInputsArray,
@@ -603,168 +622,11 @@ there's no concept of joining and splitting (yet).
 @returns {array} z_E_index - the indexes of the commitments within the Merkle Tree.  This is required for later transfers/joins so that Alice knows which leaf of the Merkle Tree she needs to get from the fTokenShieldInstance contract in order to calculate a path.
 @returns {object} txReceipt - a promise of a blockchain transaction
 */
-async function simpleFungibleBatchTransfer(
-  _inputCommitment,
-  _outputCommitments,
-  receiversPublicKeys,
-  senderSecretKey,
-  blockchainOptions,
-  zokratesOptions,
-) {
-  const { fTokenShieldJson, fTokenShieldAddress } = blockchainOptions;
-  const account = utils.ensure0x(blockchainOptions.account);
-
-  const {
-    codePath,
-    outputDirectory,
-    witnessName = 'witness',
-    pkPath,
-    provingScheme = 'gm17',
-    createProofJson = true,
-    proofName = 'proof.json',
-  } = zokratesOptions;
-
-  logger.debug('\nIN BATCH TRANSFER...');
-
-  logger.debug('Finding the relevant Shield and Verifier contracts');
-  const fTokenShield = contract(fTokenShieldJson);
-  fTokenShield.setProvider(Web3.connect());
-  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
-
-  const inputCommitment = _inputCommitment;
-  const outputCommitments = _outputCommitments;
-
-  // check we have arrays of the correct length
-  if (outputCommitments.length !== config.BATCH_PROOF_SIZE)
-    throw new Error('outputCommitments array is the wrong length');
-  if (receiversPublicKeys.length !== config.BATCH_PROOF_SIZE)
-    throw new Error('receiversPublicKeys array is the wrong length');
-
-  // as BigInt is a better representation (up until now we've preferred hex strings), we may get inputs passed as hex strings so let's do a conversion just in case
-  // addition check
-  const inputSum = BigInt(inputCommitment.value);
-  const outputSum = outputCommitments.reduce((acc, item) => acc + BigInt(item.value), BigInt(0));
-  if (inputSum !== outputSum)
-    throw new Error(`Input commitment value was ${inputSum} but output total was ${outputSum}`);
-
-  // Calculate new arguments for the proof:
-  inputCommitment.nullifier = utils.concatenateThenHash(inputCommitment.salt, senderSecretKey);
-
-  for (let i = 0; i < outputCommitments.length; i++) {
-    outputCommitments[i].commitment = utils.concatenateThenHash(
-      outputCommitments[i].value,
-      receiversPublicKeys[i],
-      outputCommitments[i].salt,
-    );
-  }
-
-  // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
-  inputCommitment.siblingPath = await merkleTree.getSiblingPath(
-    account,
-    fTokenShieldInstance,
-    inputCommitment.commitment,
-    inputCommitment.commitmentIndex,
-  );
-
-  const root = inputCommitment.siblingPath[0];
-  // TODO: checkRoot() is not essential. It's only useful for debugging as we make iterative improvements to nightfall's zokrates files.  Although we only strictly need the root to be reconciled within zokrates, it's easier to check and intercept any errors in js; so we'll first try to reconcole here. Possibly delete in future.
-  merkleTree.checkRoot(
-    inputCommitment.commitment,
-    inputCommitment.commitmentIndex,
-    inputCommitment.siblingPath,
-    root,
-  );
-
-  inputCommitment.siblingPathElements = inputCommitment.siblingPath.map(
-    nodeValue => new Element(nodeValue, 'field', config.NODE_HASHLENGTH * 8, 1),
-  ); // we truncate to 216 bits - sending the whole 256 bits will overflow the prime field
-
-  const publicInputHash = utils.concatenateThenHash(
-    root,
-    inputCommitment.nullifier,
-    ...outputCommitments.map(item => item.commitment),
-  );
-
-  // compute the proof
-  logger.debug('Computing witness...');
-  const allInputs = utils.formatInputsForZkSnark([
-    new Element(publicInputHash, 'field', 248, 1),
-    new Element(inputCommitment.value, 'field', 128, 1),
-    new Element(senderSecretKey, 'field'),
-    new Element(inputCommitment.salt, 'field'),
-    ...inputCommitment.siblingPathElements.slice(1),
-    new Element(inputCommitment.commitmentIndex, 'field', 128, 1), // the binary decomposition of a leafIndex gives its path's 'left-right' positions up the tree. The decomposition is done inside the circuit.,,
-    new Element(inputCommitment.nullifier, 'field'),
-    ...outputCommitments.map(item => new Element(item.value, 'field', 128, 1)),
-    ...receiversPublicKeys.map(item => new Element(item, 'field')),
-    ...outputCommitments.map(item => new Element(item.salt, 'field')),
-    ...outputCommitments.map(item => new Element(item.commitment, 'field')),
-    new Element(root, 'field'),
-  ]);
-
-  logger.debug(
-    'To debug witness computation, use ./zok to run up a zokrates container then paste these arguments into the terminal:',
-  );
-  logger.debug(
-    `./zokrates compute-witness -a ${allInputs.join(' ')} -i gm17/ft-batch-transfer/out`,
-  );
-
-  await zokrates.computeWitness(codePath, outputDirectory, witnessName, allInputs);
-
-  logger.debug('Generating proof...');
-  await zokrates.generateProof(pkPath, codePath, `${outputDirectory}/witness`, provingScheme, {
-    createFile: createProofJson,
-    directory: `./zokrates compute-witness -a ${allInputs.join(' ')} -i gm17/ft-batch-transfer/out`,
-    fileName: proofName,
-  });
-
-  let { proof } = JSON.parse(fs.readFileSync(`${outputDirectory}/${proofName}`));
-
-  proof = Object.values(proof);
-  // convert to flattened array:
-  proof = utils.flattenDeep(proof);
-  // convert to decimal, as the solidity functions expect uints
-  proof = proof.map(el => utils.hexToDec(el));
-
-  logger.debug('Transferring within the Shield contract');
-
-  const publicInputs = utils.formatInputsForZkSnark([
-    new Element(publicInputHash, 'field', 248, 1),
-  ]);
-
-  logger.debug('proof:');
-  logger.debug(proof);
-  logger.debug('publicInputs:');
-  logger.debug(publicInputs);
-
-  // send the token to Bob by transforming the commitment
-  const txReceipt = await fTokenShieldInstance.simpleBatchTransfer(
-    proof,
-    publicInputs,
-    root,
-    inputCommitment.nullifier,
-    outputCommitments.map(item => item.commitment),
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
-  utils.gasUsedStats(txReceipt, 'batch transfer');
-
-  const newLeavesLog = txReceipt.logs.filter(log => {
-    return log.event === 'NewLeaves';
-  });
-  const minOutputCommitmentIndex = parseInt(newLeavesLog[0].args.minLeafIndex, 10);
-  const maxOutputCommitmentIndex = minOutputCommitmentIndex + outputCommitments.length - 1;
-
-  logger.debug('TRANSFER COMPLETE\n');
-
-  return {
-    z_E: outputCommitments.map(item => item.commitment),
-    z_E_index: maxOutputCommitmentIndex,
-    txReceipt,
-  };
+async function simpleFungibleBatchTransfer() {
+  throw new Error('The compliance version does not support batch payments');
+}
+async function consolidationTransfer() {
+  throw new Error('The compliance version does not support batch consolidation');
 }
 
 /**
@@ -776,6 +638,7 @@ async function simpleFungibleBatchTransfer(
  * @param {string} commitment - the value of the commitment being burned
  * @param {string} commitmentIndex - the index of the commitment in the Merkle Tree
  * @param {Object} blockchainOptions
+ * @param {String} blockchainOptions.erc20Address - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
@@ -790,8 +653,13 @@ async function burn(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const { fTokenShieldJson, fTokenShieldAddress, tokenReceiver: _payTo } = blockchainOptions;
-
+  const {
+    fTokenShieldJson,
+    fTokenShieldAddress,
+    erc20Address,
+    tokenReceiver: _payTo,
+  } = blockchainOptions;
+  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
   const {
@@ -870,6 +738,7 @@ async function burn(
 
   // we need to compress the number of public inputs passed to solidity because of its limited stack space.
   const compressedPublicInputsArray = [
+    erc20AddressPadded,
     root,
     nullifier,
     amountLeftPadded,
@@ -891,6 +760,7 @@ async function burn(
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
+    new Element(erc20AddressPadded, 'field', 248, 1),
     new Element(payTo, 'field'),
     new Element(amount, 'field', 128, 1),
     new Element(receiverZkpPrivateKey, 'field'),
@@ -943,7 +813,7 @@ async function burn(
   logger.debug(publicInputs);
 
   // Burn the commitment and return tokens to the payTo account.
-  const txReceipt = await fTokenShieldInstance.burn(
+  const txReceipt = await fTokenShieldInstance.burnRC(
     proof,
     publicInputs,
     compressedPublicInputsArray,
@@ -969,4 +839,5 @@ module.exports = {
   blacklist,
   unblacklist,
   decryptTransaction,
+  consolidationTransfer,
 };

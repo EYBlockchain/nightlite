@@ -39,9 +39,12 @@ async function loadVk(vkDescription, vkJsonFile, blockchainOptions) {
     case 'simpleBatchTransfer':
       vkUint = 3;
       break;
+    case 'consolidationTransfer':
+      vkUint = 4;
+      break;
     default:
       // intentionally set an invalid enumUint that will fail (because currently only enums 0,1,2,3 exist in the shield contracts) in order to save users gas.
-      vkUint = 4;
+      vkUint = 99;
       break;
   }
 
