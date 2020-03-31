@@ -27,6 +27,43 @@ const {
 const { getPublicKeyTreeData } = require('./public-key-tree');
 
 /**
+Wrapper function to set admin public keys (pulling them in from elgamal.js)
+Only Admin can succesfully call this
+*/
+async function setAdminPublicKeys(blockchainOptions) {
+  const { fTokenShieldJson, fTokenShieldAddress } = blockchainOptions;
+  const account = utils.ensure0x(blockchainOptions.account);
+  const fTokenShield = contract(fTokenShieldJson);
+  fTokenShield.setProvider(Web3.connect());
+  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
+  fTokenShieldInstance.setCompressedAdminPublicKeys(
+    AUTHORITY_PUBLIC_KEYS.map(pt => edwardsCompress(pt)),
+    {
+      from: account,
+      gas: 6500000,
+      gasPrice: config.GASPRICE,
+    },
+  );
+}
+
+/**
+Wrapper function to set admin public keys (pulling them in from elgamal.js)
+Only Admin can succesfully call this
+*/
+async function setRootPruningInterval(interval, blockchainOptions) {
+  const { fTokenShieldJson, fTokenShieldAddress } = blockchainOptions;
+  const account = utils.ensure0x(blockchainOptions.account);
+  const fTokenShield = contract(fTokenShieldJson);
+  fTokenShield.setProvider(Web3.connect());
+  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
+  fTokenShieldInstance.setRootPruningInterval(interval, {
+    from: account,
+    gas: 6500000,
+    gasPrice: config.GASPRICE,
+  });
+}
+
+/**
 Blacklist an address to prevent zkp operations.  Note that this can only be called
 by the owner of TokenShield.sol, otherwise it will throw
 */
@@ -840,4 +877,6 @@ module.exports = {
   unblacklist,
   decryptTransaction,
   consolidationTransfer,
+  setAdminPublicKeys,
+  setRootPruningInterval,
 };
