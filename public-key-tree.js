@@ -18,7 +18,9 @@ async function getPublicKeyTreeData(contractInstance, _key) {
 
   const leafIndex = commitmentIndex - FIRST_LEAF_INDEX;
   if (leafIndex < 0) {
-    throw Error('Publickey is not added yet, do a mint commitment to new user\'s publickey to get added');
+    throw Error(
+      'The public key is not added to the whitelist yet, please create a mint commitment to add the key',
+    );
   }
   for (let r = PUBLIC_KEY_TREE_HEIGHT; r > 0; r--) {
     if (p % 2 === 0) {
