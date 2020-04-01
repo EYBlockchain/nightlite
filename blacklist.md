@@ -1,4 +1,4 @@
-# Blacklisting
+# Blacklist
 
 We require the ability to blacklist certain people or, more specifically, certain Ethereum addresses
 from transacting under our KYC-regulated solution
