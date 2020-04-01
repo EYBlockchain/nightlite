@@ -37,6 +37,9 @@ import "../common/merkle-tree/pk-root" as pkroot
 
 def main(field publicInputHash, private field contractAddress, private field[2] payTo, private field value, private field[2] secretKey, private field[2] salt, private field[32] path, private field order, private field[2] nullifier, private field[2] root, private field publicKeyRoot, private field[32] pathPublicKey, private field orderPublicKey, private field[4] encryption, private field[2] authorityPublicKey1, private field randomSecret)->():
 
+	// Check the commitment values will not overflow the 128 bits
+    0 == if value < 2**128 then 0 else 1 fi
+
 	// Unpack the inputs of main()
 	field[256] publicInputHashBits = unpack256(publicInputHash)
 	field[256] payToBits = unpack2x128To256(payTo)
