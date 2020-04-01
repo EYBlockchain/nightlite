@@ -26,6 +26,12 @@ describe('Random Hex tests', () => {
     const c = (b[0] < ZOKRATES_PRIME).toString();
     expect(c).toBe('true');
   });
+
+  test(`Random hex does not accept maximum smaller than the desired byte size`, async () => {
+    expect(() => {
+      randomHex(32, 100000);
+    }).toThrow();
+  });
 });
 
 describe('Edwards compression tests', () => {

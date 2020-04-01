@@ -540,10 +540,13 @@ function concatenateThenHash(...items) {
  * @param {int} max - optional parameter to set a maximum value
  */
 function randomHex(bytes, max) {
+  if (max !== undefined && (Buffer.byteLength(decToHex(max.toString()), 'utf8') - 2) / 2 < bytes) {
+    throw new Error(`Number smaller than ${bytes} bytes passed as maximum`);
+  }
   return new Promise((resolve, reject) => {
     crypto.randomBytes(bytes, (err, buf) => {
       if (err) reject(err);
-      if (max !== undefined && hexToDec(buf.toString('hex')) > max) {
+      if (hexToDec(buf.toString('hex')) > max) {
         randomHex(bytes, max);
       } else {
         resolve(`0x${buf.toString('hex')}`);
