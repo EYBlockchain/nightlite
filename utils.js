@@ -537,12 +537,17 @@ function concatenateThenHash(...items) {
 /**
  * function to generate a promise that resolves to a string of hex
  * @param {int} bytes - the number of bytes of hex that should be returned
+ * @param {int} max - optional parameter to set a maximum value
  */
-function randomHex(bytes) {
+function randomHex(bytes, max) {
   return new Promise((resolve, reject) => {
     crypto.randomBytes(bytes, (err, buf) => {
       if (err) reject(err);
-      resolve(`0x${buf.toString('hex')}`);
+      if (max !== undefined && hexToDec(buf.toString('hex')) > max) {
+        randomHex(bytes, max);
+      } else {
+        resolve(`0x${buf.toString('hex')}`);
+      }
     });
   });
 }
