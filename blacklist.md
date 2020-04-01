@@ -7,9 +7,9 @@ from transacting under our KYC-regulated solution
 
 Two data structures are used for this purpose:
 
--   a Merkle Tree whose leaves are the zkp public keys of people who have not been blacklisted. This
+- a Merkle Tree whose leaves are the zkp public keys of people who have not been blacklisted. This
   is called the Public Key Tree
--   a hash-table list of blacklisted zkp public keys. This can be edited only by the owner of the
+- a hash-table list of blacklisted zkp public keys. This can be edited only by the owner of the
   shield contract (this is called the Blacklist).
 
 ## Protocol
