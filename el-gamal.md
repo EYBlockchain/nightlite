@@ -6,9 +6,7 @@ public key (or keys). It may be enforced by requiring a user to prove in zero kn
 have correctly encrypted transaction data (specifically: the value sent, `value`; the public key of
 the sender `pkA`; the public key of the recipient, `pkB`).
 
-
 El-Gamal encryption over a Baby Jubjub elliptic curve is a snark-friendly way to do the encryption.
-
 
 ## Setup
 
@@ -24,13 +22,11 @@ The point `G` is a publicly known generator of the Baby Jubjub curve. The dot pr
 curve. A good explanation of arithmetic over this particular curve can be found
 [here](https://iden3-docs.readthedocs.io/en/latest/iden3_repos/research/publications/zkproof-standards-workshop-2/baby-jubjub/baby-jubjub.html).
 
-
 ## Encryption by a user (don't know x1, x2, x3)
 
 A regular user of this scheme must encrypt and send the commitment value (`value`), their zkp public
 key (`pkA`), and the recipient's zkp public key (`pkB`) such that only the authority can decrypt
 them.
-
 
 El-Gamal encryption works on curve points, so the values to be encrypted need to be mapped using
 scalar multiplication:
