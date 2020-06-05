@@ -5,7 +5,11 @@
  * @module erc20.js
  * @author westlad, Chaitanya-Konda, iAmMichaelConnor
  */
-
+import {
+    signTransaction as etherSignTransaction,
+    sendSignedTransaction as etherSendSignedTransaction,
+    getContractInstance,
+} from './ethers';
 const contract = require('truffle-contract');
 const zokrates = require('@eyblockchain/zokrates.js');
 const fs = require('fs');
@@ -33,7 +37,7 @@ const erc20Interface = require('./contracts/ERC20Interface.json');
  * @returns {String} commitment - Commitment of the minted coins
  * @returns {Number} commitmentIndex
  */
-async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptions) {
+async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptions, authorization = undefined, privateKey = undefined) {
   const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
@@ -119,12 +123,27 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   const fToken = contract(erc20Interface);
   fToken.setProvider(Web3.connect());
   const fTokenInstance = await fToken.at(erc20Address);
-
-  await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
-    from: account,
-    gas: 4000000,
-    gasPrice: config.GASPRICE,
-  });
+  if (authorization) {
+    const contractInstance = await getContractInstance(fToken.abi, erc20Address);
+    const encoded = await contractInstance.interface.functions.approve.encode([
+      fTokenShieldInstance.address,
+      parseInt(amount, 16),
+    ]);
+    const data = {
+      data: encoded,
+      to: erc20Address,
+      gasPrice: config.GASPRICE,
+      gasLimit: '0x4c4b40',
+    };
+    const signedTransaction = await etherSignTransaction(data, privateKey);
+    await etherSendSignedTransaction(signedTransaction);
+  } else {
+    await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
+      from: account,
+      gas: 4000000,
+      gasPrice: config.GASPRICE,
+    });
+  }
 
   logger.debug('Minting within the Shield contract');
 
@@ -137,20 +156,47 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
 
+  let txReceipt; 
   // Mint the commitment
   logger.debug('Approving ERC-20 spend from: ', fTokenShieldInstance.address);
-  const txReceipt = await fTokenShieldInstance.mint(
-    erc20AddressPadded,
-    proof,
-    publicInputs,
-    amount,
-    commitment,
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
+  if (authorization) {
+    const contractInstance = await getContractInstance(fTokenShield.abi, fTokenShieldAddress);
+    console.log(`Params ${erc20AddressPadded} ${proof} ${publicInputs} ${amount} ${commitment}`);
+    const encoded = await contractInstance.interface.functions.mint.encode([
+      erc20AddressPadded,
+      proof,
+      publicInputs,
+      amount,
+      commitment,
+    ]);
+    const data = {
+      data: encoded,
+      to: fTokenShieldAddress,
+      gasPrice: config.gasPrice,
+      gasLimit: '0x4c4b40',
+    };
+    const signedTransaction = await etherSignTransaction(data, privateKey);
+    const transaction = await etherSendSignedTransaction(signedTransaction);
+    const logsFromEvent = utils.getEventValuesFromTxReceipt(fTokenShield.abi, transaction);
+    txReceipt = {
+      tx: transaction.transactionHash,
+      receipt: logsFromEvent.receipt,
+      logs: logsFromEvent.logs,
+    };
+  } else {
+    txReceipt = await fTokenShieldInstance.mint(
+      erc20AddressPadded,
+      proof,
+      publicInputs,
+      amount,
+      commitment,
+      {
+        from: account,
+        gas: 6500000,
+        gasPrice: config.GASPRICE,
+      },
+    );
+  }
   utils.gasUsedStats(txReceipt, 'mint');
 
   const newLeafLog = txReceipt.logs.filter(log => {

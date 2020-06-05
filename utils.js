@@ -11,11 +11,13 @@ const crypto = require('crypto');
 // eslint-disable-next-line
 const createKeccakHash = require('keccak');
 const { Buffer } = require('safe-buffer');
+const ethers = require('ethers');
+const { BigNumber } = require('ethers/utils');
+const dappUtils = require('dapp-utils');
 const config = require('./config');
 const logger = require('./logger');
 
 const inputsHashLength = 32;
-
 // FUNCTIONS ON HEX VALUES
 
 /**
@@ -641,6 +643,45 @@ function gasUsedStats(txReceipt, functionName) {
   logger.debug('By verifier contract (post refund):', gasUsedByVerifierContract - refund);
 }
 
+function parseBigNumbers(object) {
+  const output = { ...object };
+  const entries = Object.entries(output);
+  entries.forEach(([key, value]) => {
+    if (value instanceof BigNumber) {
+      output[key] = value.toNumber();
+    }
+  });
+  return output;
+}
+
+function getEventValuesFromTxReceipt(abi, txReceipt) {
+  let newTxReceipt;
+  const { logs } = txReceipt;
+  newTxReceipt = JSON.parse(JSON.stringify(txReceipt));
+  delete newTxReceipt.logs;
+  const newLogs = [];
+  let newEvent;
+  const iface = new ethers.utils.Interface(abi);
+  const events = logs.map(log => iface.parseLog(log));
+  for (let i = 0; i < events.length; i += 1) {
+    if (events[i] && events[i].values && events[i].values !== null) {
+      newEvent = JSON.parse(JSON.stringify(events[i]));
+      delete newEvent.values;
+      delete newEvent.name;
+      const logDescription = events[i];
+      if (logDescription && logDescription.values && logDescription.values !== null) {
+        let { values } = logDescription;
+        values = dappUtils.removeNumericKeys(values); // values contains duplicate numeric keys for each event parameter.
+        values = parseBigNumbers(values); // convert uints (returned as BigNumber) to numbers.
+        newEvent.event = events[i].name;
+        newEvent.args = values;
+        newLogs.push(newEvent);
+      }
+    }
+  }
+  return { receipt: newTxReceipt, logs: newLogs };
+}
+
 module.exports = {
   isHex,
   utf8StringToHex,
@@ -677,4 +718,5 @@ module.exports = {
   leftPadHex,
   formatInputsForZkSnark,
   gasUsedStats,
+  getEventValuesFromTxReceipt,
 };
