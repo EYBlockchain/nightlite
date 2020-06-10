@@ -195,14 +195,13 @@ This function computes the path through a Mekle tree to get from a token
 to the root by successive hashing.  This is needed for part of the private input
 to proofs that need demonstrate that a token is in a Merkle tree.
 It works for any size of Merkle tree, it just needs to know the tree depth, which it gets from config.js
-@param {string} account - the account that is paying for these tranactions
 @param {contract} shieldContract - an instance of the shield contract that holds the commitments
 @param {string} commitment - the commitment value
 @param {integer} commitmentIndex - the leafIndex within the shield contract's merkle tree of the commitment we're getting the sibling path for
 @returns {object} containing: an array of strings - where each element of the array is a node of the sister-path of
 the path from myToken to the Merkle Root and whether the sister node is to the left or the right (this is needed because the order of hashing matters)
 */
-async function getSiblingPath(account, shieldContract, _commitment, commitmentIndex) {
+async function getSiblingPath(shieldContract, _commitment, commitmentIndex) {
   // check the commitment's format:
   // logger.debug('commitment', commitment);
   // if (commitment.length !== config.LEAF_HASHLENGTH * 2) {
@@ -233,7 +232,7 @@ async function getSiblingPath(account, shieldContract, _commitment, commitmentIn
   logger.debug('\nChecking root...');
   const rootInDb = siblingPath[0];
   logger.debug('rootInDb:', rootInDb);
-  const rootOnChain = await shieldContract.roots.call(rootInDb, { from: account });
+  const rootOnChain = await shieldContract.roots.call(rootInDb);
   logger.debug('rootOnChain:', rootOnChain);
   if (rootOnChain !== rootInDb)
     throw new Error(

@@ -395,13 +395,11 @@ async function transfer(
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   inputCommitments[0].siblingPath = await merkleTree.getSiblingPath(
-    account,
     fTokenShieldInstance,
     inputCommitments[0].commitment,
     inputCommitments[0].commitmentIndex,
   );
   inputCommitments[1].siblingPath = await merkleTree.getSiblingPath(
-    account,
     fTokenShieldInstance,
     inputCommitments[1].commitment,
     inputCommitments[1].commitmentIndex,
@@ -749,7 +747,6 @@ async function burn(
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
-    account,
     fTokenShieldInstance,
     commitment,
     commitmentIndex,
