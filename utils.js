@@ -11,9 +11,8 @@ const crypto = require('crypto');
 // eslint-disable-next-line
 const createKeccakHash = require('keccak');
 const { Buffer } = require('safe-buffer');
-const ethers = require('ethers');
-const { BigNumber } = require('ethers/utils');
-const dappUtils = require('dapp-utils');
+//  eslint-disable-next-line import/no-extraneous-dependencies
+const Abi = require('web3-eth-abi');
 const config = require('./config');
 const logger = require('./logger');
 
@@ -643,43 +642,129 @@ function gasUsedStats(txReceipt, functionName) {
   logger.debug('By verifier contract (post refund):', gasUsedByVerifierContract - refund);
 }
 
-function parseBigNumbers(object) {
-  const output = { ...object };
-  const entries = Object.entries(output);
-  entries.forEach(([key, value]) => {
-    if (value instanceof BigNumber) {
-      output[key] = value.toNumber();
-    }
-  });
-  return output;
-}
+const indexedAsHash = type =>
+  !(
+    (type.startsWith('uint') ||
+      type.startsWith('int') ||
+      type.startsWith('byte') ||
+      type.startsWith('bool') ||
+      type.startsWith('address')) &&
+    !type.includes('[')
+  );
 
-function getEventValuesFromTxReceipt(abi, txReceipt) {
-  let newTxReceipt;
-  const { logs } = txReceipt;
-  newTxReceipt = JSON.parse(JSON.stringify(txReceipt));
-  delete newTxReceipt.logs;
-  const newLogs = [];
-  let newEvent;
-  const iface = new ethers.utils.Interface(abi);
-  const events = logs.map(log => iface.parseLog(log));
-  for (let i = 0; i < events.length; i += 1) {
-    if (events[i] && events[i].values && events[i].values !== null) {
-      newEvent = JSON.parse(JSON.stringify(events[i]));
-      delete newEvent.values;
-      delete newEvent.name;
-      const logDescription = events[i];
-      if (logDescription && logDescription.values && logDescription.values !== null) {
-        let { values } = logDescription;
-        values = dappUtils.removeNumericKeys(values); // values contains duplicate numeric keys for each event parameter.
-        values = parseBigNumbers(values); // convert uints (returned as BigNumber) to numbers.
-        newEvent.event = events[i].name;
-        newEvent.args = values;
-        newLogs.push(newEvent);
+const decodeParameters = (names, types, data) => {
+  const ret = {};
+
+  if (names.length && names.length === types.length) {
+    const result = Abi.decodeParameters(types, data);
+
+    for (let i = 0; types.length > i; i += 1) {
+      if (undefined !== result[i]) {
+        ret[names[i]] = result[i];
       }
     }
   }
-  return { receipt: newTxReceipt, logs: newLogs };
+
+  return ret;
+};
+
+function createArgsParser(input) {
+  const indexedNames = [];
+  const indexedTypes = [];
+
+  const nonIndexedNames = [];
+  const nonIndexedTypes = [];
+
+  input.forEach(({ indexed, name, type }) => {
+    if (indexed) {
+      indexedNames.push(name);
+
+      // dynamically-sized values do not get stored as-is, they are SHA3'd prior
+      // to being indexed
+      if (indexedAsHash(type)) {
+        indexedTypes.push('bytes32');
+      } else {
+        indexedTypes.push(type);
+      }
+    } else {
+      nonIndexedNames.push(name);
+      nonIndexedTypes.push(type);
+    }
+  });
+
+  return ({ topics, data }) => {
+    // trim "0x.." from the front
+    const indexedData = topics
+      .slice(1)
+      .map(str => str.slice(2))
+      .join('');
+    const nonIndexedData = data.slice(2);
+
+    const args = {};
+
+    Object.assign(args, decodeParameters(indexedNames, indexedTypes, indexedData));
+    Object.assign(args, decodeParameters(nonIndexedNames, nonIndexedTypes, nonIndexedData));
+
+    return args;
+  };
+}
+
+const cachedParsers = new WeakMap();
+
+async function parseLog(logs, eventAbis, filter = {}) {
+  const filteredAbis = eventAbis.filter(({ anonymous }) => !anonymous);
+  const parsers = filteredAbis.map(thisAbi => {
+    const key = JSON.stringify(thisAbi);
+    if (!cachedParsers[key]) {
+      const { name, inputs } = thisAbi;
+
+      // compute event signature hash
+      const sig = Abi.encodeEventSignature(`${name}(${inputs.map(({ type }) => type).join(',')})`);
+
+      cachedParsers[key] = {
+        name,
+        sig,
+        parseArgs: createArgsParser(inputs),
+      };
+    }
+
+    return cachedParsers[key];
+  });
+
+  let filteredLogs = logs;
+
+  if (Object.keys(filter).length) {
+    filteredLogs = logs.filter(
+      ({ address, blockNumber }) =>
+        (undefined === filter.address || address.toLowerCase() === filter.address.toLowerCase()) &&
+        (undefined === filter.blockNumber || blockNumber === filter.blockNumber),
+    );
+  }
+  let newLogs = [];
+  newLogs = parsers.reduce((retSoFar, { name, sig, parseArgs }) => {
+    const matches = filteredLogs.reduce((soFar, log) => {
+      if (log.topics[0] === sig) {
+        try {
+          soFar.push({
+            event: name,
+            address: log.address,
+            blockNumber: log.blockNumber,
+            blockHash: log.blockHash,
+            transactionHash: log.transactionHash,
+            args: parseArgs(log),
+            log,
+          });
+        } catch (err) {
+          console.error(`Error parsing args for event ${name} in block ${log.blockNumber}`);
+        }
+      }
+      return soFar;
+    }, []);
+
+    retSoFar.push(...matches);
+    return retSoFar;
+  }, []);
+  return newLogs;
 }
 
 module.exports = {
@@ -718,5 +803,5 @@ module.exports = {
   leftPadHex,
   formatInputsForZkSnark,
   gasUsedStats,
-  getEventValuesFromTxReceipt,
+  parseLog,
 };

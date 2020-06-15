@@ -141,9 +141,7 @@ async function mint(
       nonce,
     };
     const signedTransaction = await web3.eth.accounts.signTransaction(tx, privateKey);
-    console.log(`Sign transaction ${JSON.stringify(signedTransaction)}`);
-    const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
-    console.log(`Approve ${JSON.stringify(transaction)}`);
+    await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
   } else {
     await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
       from: account,
@@ -182,13 +180,8 @@ async function mint(
     };
     const signedTransaction = await web3.eth.accounts.signTransaction(tx, privateKey);
     const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
-    console.log(`Mint ${JSON.stringify(transaction)}`);
-    const logsFromEvent = utils.getEventValuesFromTxReceipt(fTokenShield.abi, transaction);
-    txReceipt = {
-      tx: transaction.transactionHash,
-      receipt: logsFromEvent.receipt,
-      logs: logsFromEvent.logs,
-    };
+    const logs = await utils.parseLog(transaction.logs, fTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
   } else {
     txReceipt = await fTokenShieldInstance.mint(
       erc20AddressPadded,
