@@ -15,6 +15,7 @@ const logger = require('./logger');
 const Element = require('./Element');
 const Web3 = require('./provider');
 const erc20Interface = require('./contracts/ERC20Interface.json');
+const { signTransaction } = require('./services/authentication');
 /**
  * Mint a fungible token commitment.
  *
@@ -38,8 +39,6 @@ async function mint(
   blockchainOptions,
   zokratesOptions,
   authorization = undefined,
-  privateKey = undefined,
-  // secretName = undefined,
 ) {
   const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
@@ -132,15 +131,7 @@ async function mint(
     const encoded = contractInstance.methods
       .approve(fTokenShieldInstance.address, parseInt(amount, 16))
       .encodeABI();
-    const nonce = await web3.eth.getTransactionCount(account, 'pending');
-    const tx = {
-      data: encoded,
-      gasPrice: config.GASPRICE,
-      gasLimit: '0x5c4b40',
-      to: erc20Address,
-      nonce,
-    };
-    const signedTransaction = await web3.eth.accounts.signTransaction(tx, privateKey);
+    const signedTransaction = await signTransaction(authorization, encoded, erc20Address);
     await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
   } else {
     await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
@@ -165,20 +156,11 @@ async function mint(
   // Mint the commitment
   logger.debug('Approving ERC-20 spend from: ', fTokenShieldInstance.address);
   if (authorization) {
-    // web3
     const contractInstance = new web3.eth.Contract(fTokenShield.abi, fTokenShieldAddress);
     const encoded = contractInstance.methods
       .mint(erc20AddressPadded, proof, publicInputs, amount, commitment)
       .encodeABI();
-    const nonce = await web3.eth.getTransactionCount(account, 'pending');
-    const tx = {
-      data: encoded,
-      gasPrice: config.GASPRICE,
-      gasLimit: '0x6c4b40',
-      to: fTokenShieldAddress,
-      nonce,
-    };
-    const signedTransaction = await web3.eth.accounts.signTransaction(tx, privateKey);
+    const signedTransaction = await signTransaction(authorization, encoded, fTokenShieldAddress);
     const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
     const logs = await utils.parseLog(transaction.logs, fTokenShield.abi);
     txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
@@ -196,6 +178,7 @@ async function mint(
       },
     );
   }
+
   utils.gasUsedStats(txReceipt, 'mint');
 
   const newLeafLog = txReceipt.logs.filter(log => {
@@ -239,14 +222,10 @@ async function transfer(
   blockchainOptions,
   zokratesOptions,
   authorization = undefined,
-  privateKey = undefined,
 ) {
   const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
-  let account = utils.ensure0x(blockchainOptions.account);
-
-  console.log(`Private Key Original ${privateKey}`);
-  console.log(`Account Original ${account}`);
+  const account = utils.ensure0x(blockchainOptions.account);
 
   const {
     codePath,
@@ -530,20 +509,8 @@ async function transfer(
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
 
-  const newAccount = await web3.eth.accounts.create();
-  await web3.eth.sendTransaction({
-    to: newAccount.address,
-    from: account,
-    value: 20000000000000000000,
-  });
-  account = web3.utils.toChecksumAddress(newAccount.address);
-  // eslint-disable-next-line no-param-reassign
-  privateKey = newAccount.privateKey;
-  console.log(`New Account address ${account}`);
-  console.log(`New Private key ${privateKey}`);
   let txReceipt;
   if (authorization) {
-    console.log(`Transfer using Transaction signing with a new Account's private key.`);
     const contractInstance = new web3.eth.Contract(fTokenShield.abi, fTokenShieldAddress);
     const encoded = contractInstance.methods
       .transfer(
@@ -556,23 +523,10 @@ async function transfer(
         outputCommitments[1].commitment,
       )
       .encodeABI();
-    const nonce = await web3.eth.getTransactionCount(account, 'pending');
-    const tx = {
-      data: encoded,
-      gasPrice: config.GASPRICE,
-      gasLimit: '0x6c4b40',
-      to: fTokenShieldAddress,
-      nonce,
-    };
-    const signedTransaction = await web3.eth.accounts.signTransaction(tx, privateKey);
+    const signedTransaction = await signTransaction(authorization, encoded, fTokenShieldAddress);
     const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
-    console.log(`Transfer Receipt ${JSON.stringify(transaction)}`);
-    const logsFromEvent = utils.getEventValuesFromTxReceipt(fTokenShield.abi, transaction);
-    txReceipt = {
-      tx: transaction.transactionHash,
-      receipt: logsFromEvent.receipt,
-      logs: logsFromEvent.logs,
-    };
+    const logs = await utils.parseLog(transaction.logs, fTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
   } else {
     // Transfers commitment
     txReceipt = await fTokenShieldInstance.transfer(
@@ -640,6 +594,7 @@ async function simpleFungibleBatchTransfer(
   senderSecretKey,
   blockchainOptions,
   zokratesOptions,
+  authorization = undefined,
 ) {
   const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
@@ -661,7 +616,7 @@ async function simpleFungibleBatchTransfer(
   const fTokenShield = contract(fTokenShieldJson);
   fTokenShield.setProvider(Web3.connect());
   const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
-
+  const web3 = Web3.connection();
   const inputCommitment = _inputCommitment;
 
   // check we have arrays of the correct length
@@ -784,20 +739,38 @@ async function simpleFungibleBatchTransfer(
   logger.debug(proof);
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
+  let txReceipt;
+  if (authorization) {
+    const contractInstance = new web3.eth.Contract(fTokenShield.abi, fTokenShieldAddress);
+    const encoded = contractInstance.methods
+      .simpleBatchTransfer(
+        proof,
+        publicInputs,
+        root,
+        inputCommitment.nullifier,
+        outputCommitments.map(item => item.commitment),
+      )
+      .encodeABI();
+    const signedTransaction = await signTransaction(authorization, encoded, fTokenShieldAddress);
+    const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+    const logs = await utils.parseLog(transaction.logs, fTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
+  } else {
+    // send the token to Bob by transforming the commitment
+    txReceipt = await fTokenShieldInstance.simpleBatchTransfer(
+      proof,
+      publicInputs,
+      root,
+      inputCommitment.nullifier,
+      outputCommitments.map(item => item.commitment),
+      {
+        from: account,
+        gas: 6500000,
+        gasPrice: config.GASPRICE,
+      },
+    );
+  }
 
-  // send the token to Bob by transforming the commitment
-  const txReceipt = await fTokenShieldInstance.simpleBatchTransfer(
-    proof,
-    publicInputs,
-    root,
-    inputCommitment.nullifier,
-    outputCommitments.map(item => item.commitment),
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
   utils.gasUsedStats(txReceipt, 'batch transfer');
 
   const newLeavesLog = txReceipt.logs.filter(log => {
@@ -848,6 +821,7 @@ async function consolidationTransfer(
   senderSecretKey,
   blockchainOptions,
   zokratesOptions,
+  authorization = undefined,
 ) {
   const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
@@ -868,7 +842,7 @@ async function consolidationTransfer(
   const fTokenShield = contract(fTokenShieldJson);
   fTokenShield.setProvider(Web3.connect());
   const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
-
+  const web3 = Web3.connection();
   const inputCommitments = _inputCommitments;
   const outputCommitment = _outputCommitment;
 
@@ -971,19 +945,38 @@ async function consolidationTransfer(
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
 
-  // send the token to Bob by transforming the commitment
-  const txReceipt = await fTokenShieldInstance.consolidationTransfer(
-    proof,
-    publicInputs,
-    root,
-    inputCommitments.map(item => item.nullifier),
-    outputCommitment.commitment,
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
+  let txReceipt;
+  if (authorization) {
+    const contractInstance = new web3.eth.Contract(fTokenShield.abi, fTokenShieldAddress);
+    const encoded = contractInstance.methods
+      .consolidationTransfer(
+        proof,
+        publicInputs,
+        root,
+        inputCommitments.map(item => item.nullifier),
+        outputCommitment.commitment,
+      )
+      .encodeABI();
+    const signedTransaction = await signTransaction(authorization, encoded, fTokenShieldAddress);
+    const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+    const logs = await utils.parseLog(transaction.logs, fTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
+  } else {
+    // send the token to Bob by transforming the commitment
+    txReceipt = await fTokenShieldInstance.consolidationTransfer(
+      proof,
+      publicInputs,
+      root,
+      inputCommitments.map(item => item.nullifier),
+      outputCommitment.commitment,
+      {
+        from: account,
+        gas: 6500000,
+        gasPrice: config.GASPRICE,
+      },
+    );
+  }
+
   utils.gasUsedStats(txReceipt, 'consolidation transfer');
 
   const newLeafLog = txReceipt.logs.filter(log => {
@@ -1021,6 +1014,7 @@ async function burn(
   commitmentIndex,
   blockchainOptions,
   zokratesOptions,
+  authorization = undefined,
 ) {
   const {
     fTokenShieldJson,
@@ -1051,7 +1045,7 @@ async function burn(
   const fTokenShield = contract(fTokenShieldJson);
   fTokenShield.setProvider(Web3.connect());
   const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
-
+  const web3 = Web3.connection();
   // Calculate new arguments for the proof:
   const nullifier = utils.shaHash(salt, receiverZkpPrivateKey);
 
@@ -1170,21 +1164,33 @@ async function burn(
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
 
-  // Burn the commitment and return tokens to the payTo account.
-  const txReceipt = await fTokenShieldInstance.burn(
-    erc20AddressPadded,
-    proof,
-    publicInputs,
-    root,
-    nullifier,
-    amount,
-    payTo,
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
+  let txReceipt;
+  if (authorization) {
+    const contractInstance = new web3.eth.Contract(fTokenShield.abi, fTokenShieldAddress);
+    const encoded = contractInstance.methods
+      .burn(erc20AddressPadded, proof, publicInputs, root, nullifier, amount, payTo)
+      .encodeABI();
+    const signedTransaction = await signTransaction(authorization, encoded, fTokenShieldAddress);
+    const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+    const logs = await utils.parseLog(transaction.logs, fTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
+  } else {
+    // Burn the commitment and return tokens to the payTo account.
+    txReceipt = await fTokenShieldInstance.burn(
+      erc20AddressPadded,
+      proof,
+      publicInputs,
+      root,
+      nullifier,
+      amount,
+      payTo,
+      {
+        from: account,
+        gas: 6500000,
+        gasPrice: config.GASPRICE,
+      },
+    );
+  }
   utils.gasUsedStats(txReceipt, 'burn');
 
   const newRoot = await fTokenShieldInstance.latestRoot();

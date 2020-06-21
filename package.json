@@ -34,7 +34,8 @@
     "safe-buffer": "^5.2.0",
     "truffle-contract": "^4.0.15",
     "web3": "1.0.0-beta.36",
-    "winston": "^3.2.1"
+    "winston": "^3.2.1",
+    "axios": "^0.18.1"
   },
   "publishConfig": {
     "registry": "http://registry.npmjs.org/",

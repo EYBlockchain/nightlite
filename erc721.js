@@ -15,7 +15,7 @@ const logger = require('./logger');
 const Element = require('./Element');
 const Web3 = require('./provider');
 const erc721Interface = require('./contracts/ERC721Interface.json');
-
+const { signTransaction } = require('./services/authentication');
 /**
  * Mint a commitment
  * @param {string} tokenId - Token's unique ID
@@ -36,7 +36,14 @@ const erc721Interface = require('./contracts/ERC721Interface.json');
  * @returns {String} commitment
  * @returns {Number} commitmentIndex - the index of the token within the Merkle Tree.  This is required for later transfers/joins so that Alice knows which 'chunks' of the Merkle Tree she needs to 'get' from the NFTokenShield contract in order to calculate a path.
  */
-async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOptions) {
+async function mint(
+  tokenId,
+  zkpPublicKey,
+  salt,
+  blockchainOptions,
+  zokratesOptions,
+  authorization = undefined,
+) {
   const { nfTokenShieldJson, nfTokenShieldAddress, erc721Address } = blockchainOptions;
   const erc721AddressPadded = `0x${utils.strip0x(erc721Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
@@ -54,7 +61,7 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
   const nfTokenShield = contract(nfTokenShieldJson);
   nfTokenShield.setProvider(Web3.connect());
   const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
-
+  const web3 = Web3.connection();
   logger.debug('\nIN MINT...');
 
   // Calculate new arguments for the proof:
@@ -121,10 +128,17 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
   nfToken.setProvider(Web3.connect());
   const nfTokenInstance = await nfToken.at(erc721Address);
 
-  await nfTokenInstance.approve(nfTokenShieldAddress, tokenId, {
-    from: account,
-    gas: 4000000,
-  });
+  if (authorization) {
+    const contractInstance = new web3.eth.Contract(nfToken.abi, erc721Address);
+    const encoded = contractInstance.methods.approve(nfTokenShieldAddress, tokenId).encodeABI();
+    const signedTransaction = await signTransaction(authorization, encoded, erc721Address);
+    await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+  } else {
+    await nfTokenInstance.approve(nfTokenShieldAddress, tokenId, {
+      from: account,
+      gas: 4000000,
+    });
+  }
 
   logger.debug('Minting within the Shield contract');
 
@@ -137,19 +151,31 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
   logger.debug('public inputs:');
   logger.debug(publicInputs);
 
-  // Mint the commitment
-  const txReceipt = await nfTokenShieldInstance.mint(
-    erc721AddressPadded,
-    proof,
-    publicInputs,
-    tokenId,
-    commitment,
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
+  let txReceipt;
+  if (authorization) {
+    const contractInstance = new web3.eth.Contract(nfTokenShield.abi, nfTokenShieldAddress);
+    const encoded = contractInstance.methods
+      .mint(erc721AddressPadded, proof, publicInputs, tokenId, commitment)
+      .encodeABI();
+    const signedTransaction = await signTransaction(authorization, encoded, nfTokenShieldAddress);
+    const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+    const logs = await utils.parseLog(transaction.logs, nfTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
+  } else {
+    // Mint the commitment
+    txReceipt = await nfTokenShieldInstance.mint(
+      erc721AddressPadded,
+      proof,
+      publicInputs,
+      tokenId,
+      commitment,
+      {
+        from: account,
+        gas: 6500000,
+        gasPrice: config.GASPRICE,
+      },
+    );
+  }
   utils.gasUsedStats(txReceipt, 'mint');
 
   const newLeafLog = txReceipt.logs.filter(log => {
@@ -191,6 +217,7 @@ async function transfer(
   commitmentIndex,
   blockchainOptions,
   zokratesOptions,
+  authorization = undefined,
 ) {
   const { nfTokenShieldJson, nfTokenShieldAddress, erc721Address } = blockchainOptions;
   const erc721AddressPadded = `0x${utils.strip0x(erc721Address).padStart(64, '0')}`;
@@ -211,7 +238,7 @@ async function transfer(
   const nfTokenShield = contract(nfTokenShieldJson);
   nfTokenShield.setProvider(Web3.connect());
   const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
-
+  const web3 = Web3.connection();
   // Calculate new arguments for the proof:
   const nullifier = utils.shaHash(originalCommitmentSalt, senderZkpPrivateKey);
   const outputCommitment = utils.shaHash(
@@ -345,19 +372,35 @@ async function transfer(
   logger.debug(proof);
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
-
-  const txReceipt = await nfTokenShieldInstance.transfer(
-    proof,
-    publicInputs,
-    root,
-    nullifier,
-    outputCommitment,
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
+  let txReceipt;
+  if (authorization) {
+    const contractInstance = new web3.eth.Contract(nfTokenShield.abi, nfTokenShieldAddress);
+    const encoded = contractInstance.methods
+      .transfer(proof, publicInputs, root, nullifier, outputCommitment)
+      .encodeABI();
+    const signedTransaction = await signTransaction(
+      authorization,
+      encoded,
+      nfTokenShieldAddress,
+      true,
+    );
+    const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+    const logs = await utils.parseLog(transaction.logs, nfTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
+  } else {
+    txReceipt = await nfTokenShieldInstance.transfer(
+      proof,
+      publicInputs,
+      root,
+      nullifier,
+      outputCommitment,
+      {
+        from: account,
+        gas: 6500000,
+        gasPrice: config.GASPRICE,
+      },
+    );
+  }
   utils.gasUsedStats(txReceipt, 'transfer');
 
   const newLeafLog = txReceipt.logs.filter(log => {
@@ -403,6 +446,7 @@ async function burn(
   commitmentIndex,
   blockchainOptions,
   zokratesOptions,
+  authorization = undefined,
 ) {
   const {
     nfTokenShieldJson,
@@ -427,7 +471,7 @@ async function burn(
   const nfTokenShield = contract(nfTokenShieldJson);
   nfTokenShield.setProvider(Web3.connect());
   const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
-
+  const web3 = Web3.connection();
   const payToOrDefault = payTo || account; // have the option to pay out to another address
   logger.debug('\nIN BURN...');
 
@@ -546,21 +590,33 @@ async function burn(
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
 
-  // Burns commitment and returns token to payTo
-  const txReceipt = await nfTokenShieldInstance.burn(
-    erc721AddressPadded,
-    proof,
-    publicInputs,
-    root,
-    nullifier,
-    tokenId,
-    payTo,
-    {
-      from: account,
-      gas: 6500000,
-      gasPrice: config.GASPRICE,
-    },
-  );
+  let txReceipt;
+  if (authorization) {
+    const contractInstance = new web3.eth.Contract(nfTokenShield.abi, nfTokenShieldAddress);
+    const encoded = contractInstance.methods
+      .burn(erc721AddressPadded, proof, publicInputs, root, nullifier, tokenId, payTo)
+      .encodeABI();
+    const signedTransaction = await signTransaction(authorization, encoded, nfTokenShieldAddress);
+    const transaction = await web3.eth.sendSignedTransaction(signedTransaction.rawTransaction);
+    const logs = await utils.parseLog(transaction.logs, nfTokenShield.abi);
+    txReceipt = { tx: transaction.transactionHash, receipt: transaction, logs };
+  } else {
+    // Burns commitment and returns token to payTo
+    txReceipt = await nfTokenShieldInstance.burn(
+      erc721AddressPadded,
+      proof,
+      publicInputs,
+      root,
+      nullifier,
+      tokenId,
+      payTo,
+      {
+        from: account,
+        gas: 6500000,
+        gasPrice: config.GASPRICE,
+      },
+    );
+  }
   utils.gasUsedStats(txReceipt, 'burn');
 
   if (fs.existsSync(`${outputDirectory}/${commitment}-${proofName}`))
