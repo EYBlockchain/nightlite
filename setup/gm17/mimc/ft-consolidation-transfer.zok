@@ -1,0 +1,112 @@
+import "hashes/sha256/1024bit.code" as sha256of1024
+import "hashes/sha256/512bit.code" as sha256of512
+import "hashes/sha256/IVconstants.code" as IVconstants
+import "hashes/sha256/shaRoundNoBoolCheck.code" as sha256
+import "../common/hashes/sha256/sha256of6144.zok" as sha256of6144
+
+import "../common/concat/concatenate256x256.zok" as concatenate256x256
+import "../common/concat/concatenate256x128x256x256.zok" as concatenate256x128x256x256
+import "../common/concat/concatenateFields20x2x128.zok" as concatenateFields20x2x128
+
+import "utils/pack/unpack128.code" as unpack128
+import "utils/pack/nonStrictUnpack256.code" as unpack256
+import "utils/pack/pack128.code" as pack128
+import "utils/pack/pack256.code" as pack256
+import "../common/packing/unpack2x128To256.zok" as unpack2x128To256
+
+import "../common/hashes/sha256/padding/shaPad256To512.zok" as shaPad256To512
+import "../common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
+import "../common/hashes/sha256/padding/shaPad640To1024" as shaPad640To1024
+import "../common/hashes/sha256/padding/shaPad896To1024" as shaPad896To1024
+import "../common/hashes/sha256/padding/shaPad5632To6144" as shaPad5632To6144
+
+import "../common/merkle-tree/mimc-root.zok" as mimcroot
+
+
+// Inputs for main are:
+
+// publicInputHash = hash(root, nullifiers[], outputCommitment)
+// Alice's inputValues[] (private)
+// inputSalts[] - Alice's salts for each input coin (private)
+// secretKeyA -  Alice's secret key (private)
+// paths[] - the Merkle paths for each of Alice's input commitments (private)
+// order[] - leafIndexes for each input commitment (private)
+
+// nullifiers[] - the nullifiers for each of Alices commitment (public)
+
+// New outputCommitment created by Alice:
+// outputSalt - the outputSalt corresponding to outputCommitment (private)
+// outputValue - the amount contained in the corresponding outputCommitment (private)
+// publicKey - Bobs' public key (private)
+// outputCommitment - the commitments corresponding to outputValue (public)
+
+// root - the Merkle root (public)
+
+
+def main(field publicInputHash, private field contractAddress, private field[20] inputValues, private field[2] secretKeyA, private field[20][2] inputSalts, private field[20][32] paths, private field[20] order, private field[20][2] nullifiers, private field outputValue, private field[2] publicKey, private field[2] outputSalt, private field[2] outputCommitment, private field root)->():
+
+
+field[256] publicInputHashBits = unpack256(publicInputHash)
+field[256] contractAddressBits = unpack256(contractAddress)
+field[256] secretKeyABits = unpack2x128To256(secretKeyA)
+field[512] secretKeyAPadded = shaPad256To512(secretKeyABits)
+field[256] publicKeyABits = sha256of512(secretKeyAPadded[0..256], secretKeyAPadded[256..512])
+field[896] preimage896 = [0; 896]
+field[1024] preimage1024 = [0; 1024]
+field total = 0
+
+//check that we have correctly provided a public nullifier
+for field i in 0..20 do
+  field[512] preimage512 = concatenate256x256(unpack2x128To256(inputSalts[i]), secretKeyABits)
+  preimage1024 = shaPad512To1024(preimage512)
+  nullifierBitsCheck = sha256of1024(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024])
+
+  nullifierBits = unpack2x128To256(nullifiers[i])
+  nullifierBits == nullifierBitsCheck
+endfor
+
+//check that each commitment is in the merkle tree
+for field i in 0..20 do
+  total = total + inputValues[i]
+  0 == if inputValues[i] < 2**128 then 0 else 1 fi
+  //commitment[i] = H(value[i]|publicKeyA|inputSalts[i])
+
+  field[128] inputValueBits = unpack128(inputValues[i])
+  inputValueBits[0] == 0 // overflow check
+  field[256] inputSaltBits = unpack2x128To256(inputSalts[i])
+  preimage896 = concatenate256x128x256x256(contractAddressBits, inputValueBits, publicKeyABits, inputSaltBits)
+  preimage1024 = shaPad896To1024(preimage896)
+
+  field[256] shaHash = sha256of1024(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024]) //inputCommitment[i]
+  field mimcHash = pack256(shaHash)
+  mimcHash = mimcroot(paths[i], order[i], mimcHash) //root calculated from inputCommitment[i]
+  root == mimcHash //root check
+endfor
+
+//check that values match
+total == outputValue
+
+//check output commitment
+//commitment = H(value|publicKeyA|outputSalt)
+0 == if outputValue < 2**128 then 0 else 1 fi
+field[128] outputValueBits = unpack128(outputValue)
+field[256] publicKeyBits = unpack2x128To256(publicKey)
+field[256] outputSaltBits = unpack2x128To256(outputSalt)
+preimage896 = concatenate256x128x256x256(contractAddressBits, outputValueBits, publicKeyBits, outputSaltBits)
+preimage1024 = shaPad896To1024(preimage896)
+field[256] commitmentBitsCheck = sha256of1024(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024])
+field[256] outputCommitmentBits = unpack2x128To256(outputCommitment)
+outputCommitmentBits == commitmentBitsCheck
+
+
+// Check that the 'public inputs' hash to the publicInputHash
+// publicInputHash = H(root, ...nullifiers, outputCommitment)
+
+field[256] rootBits = unpack256(root)
+field[5120] nullifiersBits = concatenateFields20x2x128(nullifiers)
+field[6144] preimage6144 = shaPad5632To6144([...rootBits, ...nullifiersBits, ...outputCommitmentBits])
+field[256] publicInputHashBitsCheck = sha256of6144(preimage6144[0..256], preimage6144[256..512], preimage6144[512..768], preimage6144[768..1024], preimage6144[1024..1280], preimage6144[1280..1536], preimage6144[1536..1792], preimage6144[1792..2048], preimage6144[2048..2304], preimage6144[2304..2560], preimage6144[2560..2816], preimage6144[2816..3072], preimage6144[3072..3328], preimage6144[3328..3584], preimage6144[3584..3840], preimage6144[3840..4096], preimage6144[4096..4352], preimage6144[4352..4608], preimage6144[4608..4864], preimage6144[4864..5120], preimage6144[5120..5376], preimage6144[5376..5632], preimage6144[5632..5888], preimage6144[5888..6144])
+
+publicInputHashBits[8..256] == publicInputHashBitsCheck[8..256]
+
+return

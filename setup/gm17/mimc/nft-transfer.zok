@@ -1,0 +1,107 @@
+import "hashes/sha256/1024bit.code" as sha256of1024
+import "hashes/sha256/512bit.code" as sha256of512
+import "hashes/sha256/1536bit.code" as sha256of1536
+
+import "../common/concat/concatenate256x256.zok" as concatenate256x256
+import "../common/concat/concatenate3x256.zok" as concatenate3x256
+import "../common/concat/concatenate4x256.zok" as concatenate4x256
+
+import "utils/pack/unpack128.code" as unpack128
+import "utils/pack/nonStrictUnpack256.code" as unpack256
+import "utils/pack/pack128.code" as pack128
+import "utils/pack/pack256.code" as pack256
+import "../common/packing/unpack2x128To256.zok" as unpack2x128To256
+
+import "../common/hashes/sha256/padding/shaPad256To512.zok" as shaPad256To512
+import "../common/hashes/sha256/padding/shaPad1024To1536.zok" as shaPad1024To1536
+import "../common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
+import "../common/hashes/sha256/padding/shaPad768To1024" as shaPad768To1024
+
+import "../common/merkle-tree/mimc-root.zok" as mimcroot
+
+// Inputs for main are:
+// asset - the tokenId of the ERC-721 token
+// siblingPath - the sibling-path from the commitmentA (being spent) to the root of the merkle tree
+// root - the merkle root
+// nullifier - nullifier of the commitment being spent
+// publicKeyB - public key of Bob; the recipient of the asset
+// saltA - salt for Alice's commitment being spent
+// saltB - salt for the commitment being created for the recipient Bob
+// secretKeyA - secret key of Alice
+// commitmentB - the commitment being created the recipient Bob
+// publicInputHash = hash(root, nullifier, commitmentB)
+
+// Note - we now use 216 bits for the Merkle tree calculation. This is because 432 is the biggest input we can use for sha256 if we want 432/2 to end on a byte boundary for easier Solidity computation without needing to do full rounds and we need to concatenate the two child hashes. We consider 216 bits to be sufficiently secure. The nullifier, commitment and root retain 256-bit security.
+
+// Each field element passed to main() can be at most 128bits, to make use of unpack128() so most variables occupy two fields (except the publicInputHash, which we maximize as 248-bits)
+
+def main(field publicInputHash, private field contractAddress, private field[2] asset, private field[32] path, private field order, private field[2] nullifier, private field[2] publicKeyB, private field[2]  saltA, private field[2] saltB, private field[2] secretKeyA, private field root, private field[2] commitmentB)->():
+
+	// Unpack the inputs of main() to 128 bits. We'll unpack each field to its own 128 bit strings for simplicity for now. Later efficiencies could be made by grouping some inputs.
+
+	field[256] publicInputHashBits = unpack256(publicInputHash)
+	field[256] contractAddressBits = unpack256(contractAddress)
+
+	field[256] assetBits = unpack2x128To256(asset)
+	field[256] secretKeyABits = unpack2x128To256(secretKeyA)
+	field[512] secretKeyAPadded = shaPad256To512(secretKeyABits)
+
+	field[256] saltBBits = unpack2x128To256(saltB)
+	field[256] saltABits = unpack2x128To256(saltA)
+	field[256] nullifierBits = unpack2x128To256(nullifier)
+	field[256] publicKeyBBits = unpack2x128To256(publicKeyB)
+	field[256] commitmentBBits = unpack2x128To256(commitmentB)
+
+	field[256] rootBits = unpack256(root)
+
+	// H(saltA|secretKeyA) = nullifier.
+
+	field[1024] preimage1024 = shaPad512To1024(concatenate256x256(saltABits, secretKeyABits))
+	field[256] nullifierBitsCheck = sha256of1024(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024])
+
+
+	// H(asset|publicKeyA|saltA) = commitmentA is in the Merkle Tree
+
+	// Calculation of publicKeyA from H(secretKeyA)
+	field[256] publicKeyABits = sha256of512(secretKeyAPadded[0..256], secretKeyAPadded[256..512])
+
+
+	// And calculation of the commitment
+	field[1024] commitmentAPreImage = concatenate4x256(contractAddressBits, assetBits, publicKeyABits, saltABits)
+	field[1536] commitmentAPadded = shaPad1024To1536(commitmentAPreImage)
+	field[256] commitmentA = sha256of1536(commitmentAPadded[0..256], commitmentAPadded[256..512], commitmentAPadded[512..768], commitmentAPadded[768..1024], commitmentAPadded[1024..1280], commitmentAPadded[1280..1536]) // commitmentA
+
+	// concatenate siblings and hash all the way up to the root:
+	field mimcHash = pack256(commitmentA)
+	mimcHash = mimcroot(path, order, mimcHash)
+
+	// save the computed root:
+	field rootCheck = mimcHash
+
+	// Know asset|publicKeyB|saltB such that H(asset|publicKeyB|saltB) = commitmentB
+	field[1024] commitmentBPreImage = concatenate4x256(contractAddressBits, assetBits, publicKeyBBits, saltBBits)
+	field[1536] commitmentBPadded = shaPad1024To1536(commitmentBPreImage)
+
+	field[256] commitmentBBitsCheck = sha256of1536(commitmentBPadded[0..256], commitmentBPadded[256..512], commitmentBPadded[512..768], commitmentBPadded[768..1024], commitmentBPadded[1024..1280], commitmentBPadded[1280..1536]) // commitmentB
+
+
+	//check proofs
+
+	nullifierBits == nullifierBitsCheck
+
+	root == rootCheck
+
+	commitmentBBits == commitmentBBitsCheck
+
+
+	// Check that the 'public inputs' hash to the publicInputHash:
+
+	field[768] preimage768 = concatenate3x256(rootBits, nullifierBits, commitmentBBits)
+	field[1024] publicHashPadded = shaPad768To1024(preimage768)
+
+	field[256] publicInputHashBitsCheck = sha256of1024(publicHashPadded[0..256], publicHashPadded[256..512], publicHashPadded[512..768], publicHashPadded[768..1024])
+
+	publicInputHashBits[8..256] == publicInputHashBitsCheck[8..256]
+
+
+	return

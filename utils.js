@@ -8,7 +8,10 @@
 const BI = require('big-integer');
 const hexToBinary = require('hex-to-binary');
 const crypto = require('crypto');
+// eslint-disable-next-line
+const createKeccakHash = require('keccak');
 const { Buffer } = require('safe-buffer');
+const config = require('./config');
 const logger = require('./logger');
 
 const inputsHashLength = 32;
@@ -404,6 +407,80 @@ function concatenate(a, b) {
   return buffer;
 }
 
+function addMod(addMe, m) {
+  return addMe.reduce((e, acc) => (e + acc) % m, BigInt(0));
+}
+
+function powerMod(base, exponent, m) {
+  if (m === BigInt(1)) return BigInt(0);
+  let result = BigInt(1);
+  let b = base % m;
+  let e = exponent;
+  while (e > BigInt(0)) {
+    if (e % BigInt(2) === BigInt(1)) result = (result * b) % m;
+    // eslint-disable-next-line no-bitwise
+    e >>= BigInt(1);
+    b = (b * b) % m;
+  }
+  return result;
+}
+
+function keccak256Hash(item) {
+  const preimage = strip0x(item);
+  const h = `0x${createKeccakHash('keccak256')
+    .update(preimage, 'hex')
+    .digest('hex')}`;
+  return h;
+}
+
+/**
+mimc encryption function
+@param  {String} x - the input value
+@param {String} k - the key value
+@param {String} seed - input seed for first round (=0n for a hash)
+@param
+*/
+function mimcpe7(x, k, seed, roundCount, m) {
+  let xx = x;
+  let t;
+  let c = seed;
+  // eslint-disable-next-line
+  for (let i = 0; i < roundCount; i++) {
+    c = keccak256Hash(c);
+    t = addMod([xx, BigInt(c), k], m); // t = x + c_i + k
+    xx = powerMod(t, BigInt(7), m); // t^7
+  }
+  // Result adds key again as blinding factor
+  return addMod([xx, k], m);
+}
+
+function mimcpe7mp(x, k, seed, roundCount, m = BigInt(config.ZOKRATES_PRIME)) {
+  let r = k;
+  let i;
+  // eslint-disable-next-line
+  for (i = 0; i < x.length; i++) {
+    r = (r + (x[i] % m) + mimcpe7(x[i], r, seed, roundCount, m)) % m;
+  }
+  return r;
+}
+
+function mimcHash(...msgs) {
+  // elipses means input stored in array called msgs
+  const mimc = '0x6d696d63'; // this is 'mimc' in hex as a nothing-up-my-sleeve seed
+  return `0x${mimcpe7mp(
+    // '${' notation '0x${x}' -> '0x34' w/ x=34
+    msgs.map(e => {
+      const f = BigInt(ensure0x(e));
+      // if (f > config.ZOKRATES_PRIME) throw new Error('MiMC input exceeded prime field size');
+      return f;
+    }),
+    BigInt(0), // k
+    keccak256Hash(mimc), // seed
+    91, // rounds of hashing
+  )
+    .toString(16) // hex string - can remove 0s
+    .padStart(64, '0')}`; // so pad
+}
 /**
  * Utility function:
  * hashes a concatenation of items but it does it by
@@ -435,7 +512,7 @@ function hash(item) {
  * digest: [output format ("hex" in our case)]
  * slice: [begin value] outputs the items in the array on and after the 'begin value'
  */
-function concatenateThenHash(...items) {
+function shaHash(...items) {
   const concatvalue = items
     .map(item => Buffer.from(strip0x(item), 'hex'))
     .reduce((acc, item) => concatenate(acc, item));
@@ -447,15 +524,33 @@ function concatenateThenHash(...items) {
   return h;
 }
 
+function concatenateThenHash(...items) {
+  let h;
+  if (config.HASH_TYPE === 'mimc' || process.env.HASH_TYPE === 'mimc') {
+    h = mimcHash(...items);
+  } else {
+    h = shaHash(...items);
+  }
+  return h;
+}
+
 /**
  * function to generate a promise that resolves to a string of hex
  * @param {int} bytes - the number of bytes of hex that should be returned
+ * @param {int} max - optional parameter to set a maximum value
  */
-function randomHex(bytes) {
+function randomHex(bytes, max) {
+  if (max !== undefined && (Buffer.byteLength(decToHex(max.toString()), 'utf8') - 2) / 2 < bytes) {
+    throw new Error(`Number smaller than ${bytes} bytes passed as maximum`);
+  }
   return new Promise((resolve, reject) => {
     crypto.randomBytes(bytes, (err, buf) => {
       if (err) reject(err);
-      resolve(`0x${buf.toString('hex')}`);
+      if (hexToDec(buf.toString('hex')) > max) {
+        randomHex(bytes, max);
+      } else {
+        resolve(`0x${buf.toString('hex')}`);
+      }
     });
   });
 }
@@ -515,7 +610,13 @@ function formatInputsForZkSnark(elements) {
         // each vector element will be a 'decimal representation' of integers modulo a prime. p=21888242871839275222246405745257275088548364400416034343698204186575808495617 (roughly = 2*10e76 or = 2^254)
         a = a.concat(hexToFieldPreserve(element.hex, element.packingSize, element.packets, 1));
         break;
-
+      case 'scalar':
+        // this copes with a decimal (BigInt) field element, that needs no conversion
+        // eslint-disable-next-line valid-typeof
+        if (typeof element.hex !== 'bigint')
+          throw new Error(`scalar ${element.hex} is not of type BigInt`);
+        a = a.concat(element.hex.toString(10));
+        break;
       default:
         throw new Error('Encoding type not recognised');
     }
@@ -559,8 +660,9 @@ module.exports = {
   isProbablyBinary,
   fieldsToDec,
   xor,
-  concatenate,
   hash,
+  concatenate,
+  shaHash,
   concatenateThenHash,
   add,
   parseToDigitsArray,

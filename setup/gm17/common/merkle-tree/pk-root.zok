@@ -1,0 +1,14 @@
+
+import "./order-fields.zok" as orderFields
+import "../hashes/mimc/mimc-hash-2.zok" as mimc2
+import "utils/pack/unpack128.code" as unpack128
+
+def main(field[32] pathPublicKey, field orderPublicKey, field publicKeyHash) -> (field):
+    field[128] orderPublicKeyBits = unpack128(orderPublicKey)
+    // concatenate siblings and hash all the way up to the root
+	for field i in 0..32 do
+		field j = 31-i
+		field k = 127-i
+		publicKeyHash = mimc2(orderFields(orderPublicKeyBits[k], publicKeyHash, pathPublicKey[j]))
+	endfor
+    return publicKeyHash

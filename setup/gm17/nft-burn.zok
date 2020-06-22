@@ -1,36 +1,25 @@
 import "hashes/sha256/1536bit.code" as sha256of1536
 import "hashes/sha256/1024bit.code" as sha256of1024
 import "hashes/sha256/512bit.code" as sha256of512
+
+import "./common/concat/concatenate256x256.zok" as concatenate256x256
+import "./common/concat/concatenate3x256.zok" as concatenate3x256
+import "./common/concat/concatenate4x256.zok" as concatenate4x256
+import "./common/concat/concatenate5x256.zok" as concatenate5x256
+
 import "utils/pack/unpack128.code" as unpack128
 import "utils/pack/nonStrictUnpack256.code" as unpack256
-import "./utils/sha256/padding/shaPad432To512.zok" as shaPad432To512
-import "./utils/sha256/padding/shaPad256To512.zok" as shaPad256To512
-import "./utils/sha256/padding/shaPad512To1024.zok" as shaPad512To1024
-import "./utils/sha256/padding/shaPad1024To1536.zok" as shaPad1024To1536
-import "./utils/sha256/padding/shaPad1280To1536.zok" as shaPad1280To1536
+import "./common/packing/unpack2x128To256.zok" as unpack2x128To256
 
-def concatenate256x256x256x256x256(field[256] a, field[256] b, field[256] c, field[256] d, field[256] e)->(field[1280]):
-	return [...a, ...b, ...c, ...d, ...e]
+import "./common/hashes/sha256/padding/shaPad256To512.zok" as shaPad256To512
+import "./common/hashes/sha256/padding/shaPad432To512.zok" as shaPad432To512
+import "./common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
+import "./common/hashes/sha256/padding/shaPad640To1024" as shaPad640To1024
+import "./common/hashes/sha256/padding/shaPad768To1024" as shaPad768To1024
+import "./common/hashes/sha256/padding/shaPad1024To1536" as shaPad1024To1536
+import "./common/hashes/sha256/padding/shaPad1280To1536" as shaPad1280To1536
 
-def concatenate256x256x256x256(field[256] a, field[256] b, field[256] c, field[256] d)->(field[1024]):
-	return [...a, ...b, ...c, ...d]
-
-def concatenate256x256x256(field[256] a, field[256] b, field[256] c)->(field[768]):
-	return [...a, ...b, ...c]
-
-def concatenate256x256(field[256] a, field[256] b)->(field[512]):
-	return [...a, ...b]
-
-def orderedConcatenate216x216(field order, field[216] pathNode, field[216] siblingNode)->(field[432]):
-	field[216] left = if order==0 then pathNode else siblingNode fi
-	field[216] right = if order==0 then siblingNode else pathNode fi
-	return [...left, ...right]
-
-// unpacks a siblingPath's node to bits, ready for sha-ing:
-def unpackSiblingNode(field siblingNode)->(field[216]):
-	field[256] siblingNodeBits = unpack256(siblingNode)
-	return siblingNodeBits[40..256]
-
+import "./common/merkle-tree/sha-root.zok" as sharoot
 
 // Inputs for main are:
 
@@ -80,8 +69,6 @@ def main(field publicInputHash, private field contractAddress, private field pay
 	field[128] rootLowBits = unpack128(rootLow)
 	field[256] rootBits = [...rootHighBits, ...rootLowBits]
 
-	field[128] orderBits = unpack128(order)
-
 
 	// First we construct a proof that the nullifier is correct.
 	// Concatenate salt|secretKey.
@@ -102,18 +89,14 @@ def main(field publicInputHash, private field contractAddress, private field pay
 
 	// Next calculate the commitment = H(contractAddress|asset|publicKey|salt)
 
-	field[1024] commitmentPreImage = concatenate256x256x256x256(contractAddressBits, assetBits, publicKeyBits, saltBits)
+	field[1024] commitmentPreImage = concatenate4x256(contractAddressBits, assetBits, publicKeyBits, saltBits)
 	field[1536] commitmentPadded = shaPad1024To1536(commitmentPreImage)
 
 	field[256] hash = sha256of1536(commitmentPadded[0..256], commitmentPadded[256..512], commitmentPadded[512..768], commitmentPadded[768..1024], commitmentPadded[1024..1280], commitmentPadded[1280..1536]) // commitment
 
 	// concatenate siblings and hash all the way up to the root:
-	for field i in 0..32 do
-		field j = 31-i
-		field k = 127-i
-		preimage512 = shaPad432To512(orderedConcatenate216x216(orderBits[k], hash[40..256], unpackSiblingNode(siblingPath[j])))
-		hash = sha256of512(preimage512[0..256], preimage512[256..512])
-  endfor
+	hash = sharoot(siblingPath, order, hash)
+
 	// save the computed root:
 	field[256] rootBitsCheck = hash
 
@@ -126,7 +109,7 @@ def main(field publicInputHash, private field contractAddress, private field pay
 	// Check that the 'public inputs' hash to the publicInputHash:
 	// (This also intertwines the 'payTo' input into the proof)
 
-	field[1280] preimage1280 = concatenate256x256x256x256x256(contractAddressBits, rootBits, nullifierBits, assetBits, payToBits)
+	field[1280] preimage1280 = concatenate5x256(contractAddressBits, rootBits, nullifierBits, assetBits, payToBits)
 
 	field[1536] publicInputPadded = shaPad1280To1536(preimage1280)
 	field[256] publicInputHashBitsCheck = sha256of1536(publicInputPadded[0..256], publicInputPadded[256..512], publicInputPadded[512..768], publicInputPadded[768..1024], publicInputPadded[1024..1280], publicInputPadded[1280..1536])

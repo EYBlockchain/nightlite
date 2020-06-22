@@ -1,0 +1,6 @@
+import "utils/pack/nonStrictUnpack256.code" as unpack256
+
+// unpacks a siblingPath's node to bits, ready for sha-ing:
+def unpackSiblingNode(field siblingNode)->(field[216]):
+	field[256] siblingNodeBits = unpack256(siblingNode)
+	return siblingNodeBits[40..256]

@@ -1,0 +1,21 @@
+import "hashes/sha256/IVconstants.code" as IVconstants
+import "hashes/sha256/shaRoundNoBoolCheck.code" as sha256
+
+// A function that takes 22 field[256] arrays as inputs
+// and applies 11 rounds of sha256 compression.
+// It returns an array of 256 field elements.
+def main(field[256] a0, field[256] a1, field[256] a2, field[256] a3, field[256] a4, field[256] a5, field[256] a6, field[256] a7, field[256] a8, field[256] a9, field[256] a10, field[256] a11, field[256] a12, field[256] a13, field[256] a14, field[256] a15, field[256] a16, field[256] a17, field[256] a18, field[256] a19, field[256] a20, field[256] a21, field[256] a22, field[256] a23) -> (field[256]):
+    IV =  IVconstants()
+    digest1 =  sha256(a0, a1, IV)
+    digest2 =  sha256(a2, a3, digest1)
+    digest3 =  sha256(a4, a5, digest2)
+    digest4 =  sha256(a6, a7, digest3)
+    digest5 =  sha256(a8, a9, digest4)
+    digest6 =  sha256(a10, a11, digest5)
+    digest7 =  sha256(a12, a13, digest6)
+    digest8 =  sha256(a14, a15, digest7)
+    digest9 =  sha256(a16, a17, digest8)
+    digest10 =  sha256(a18, a19, digest9)
+    digest11 =  sha256(a20, a21, digest10)
+    digest12 =  sha256(a22, a23, digest11)
+	return digest12

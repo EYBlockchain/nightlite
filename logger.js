@@ -5,15 +5,8 @@
 const { createLogger, format, transports } = require('winston');
 const { inspect } = require('util');
 
-function isPrimitive(val) {
-  return val === null || (typeof val !== 'object' && typeof val !== 'function');
-}
-
 function formatWithInspect(val) {
-  const prefix = isPrimitive(val) ? '' : '\n';
-  const shouldFormat = typeof val !== 'string';
-
-  return prefix + (shouldFormat ? inspect(val, { depth: null, colors: true }) : val);
+  return `${val instanceof Object ? '\n' : ''} ${inspect(val, { depth: null, colors: true })}`;
 }
 
 const logLevel = process.env.NIGHTLITE_LOG_LEVEL ? process.env.NIGHTLITE_LOG_LEVEL : 'info';
@@ -21,15 +14,23 @@ const logLevel = process.env.NIGHTLITE_LOG_LEVEL ? process.env.NIGHTLITE_LOG_LEV
 module.exports = createLogger({
   level: logLevel,
   format: format.combine(
-    format.timestamp(),
     format.errors({ stack: true }),
     format.colorize(),
     format.printf(info => {
-      const msg = formatWithInspect(info.message);
-      const splatArgs = info[Symbol.for('splat')] || [];
-      const rest = splatArgs.map(data => formatWithInspect(data)).join(' ');
+      const splatArgs = info[Symbol.for('splat')];
+      let log = `${info.level}: ${info.message}`;
 
-      return `${info.level}: ${msg} ${rest}`;
+      // append splat messages to log
+      if (splatArgs) {
+        const rest = splatArgs.map(data => formatWithInspect(data)).join();
+        log += ` ${rest}`;
+      }
+
+      // check if error log, if so append error stack
+      if (info.stack) {
+        log += ` ${info.stack}`;
+      }
+      return log;
     }),
   ),
   transports: [new transports.Console()],

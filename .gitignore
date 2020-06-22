@@ -73,6 +73,7 @@ dist
 # testing
 /coverage
 
+.on-save.json
 .organizationrc.json
 docker-compose.override.yml
 config/local.json5

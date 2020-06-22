@@ -1,0 +1,133 @@
+import "hashes/sha256/1536bit.code" as sha256of1536
+import "hashes/sha256/1024bit.code" as sha256of1024
+import "hashes/sha256/512bit.code" as sha256of512
+import "hashes/sha256/IVconstants.code" as IVconstants
+import "hashes/sha256/shaRoundNoBoolCheck.code" as sha256
+import "../common/hashes/sha256/sha256of6144.zok" as sha256of6144
+
+import "../common/concat/concatenate256x256.zok" as concatenate256x256
+import "../common/concat/concatenate256x128x256x256.zok" as concatenate256x128x256x256
+import "../common/concat/concatenateFields22x2x128.zok" as concatenateFields22x2x128
+
+import "utils/pack/unpack128.code" as unpack128
+import "utils/pack/nonStrictUnpack256.code" as unpack256
+import "utils/pack/pack128.code" as pack128
+import "utils/pack/pack256.code" as pack256
+import "../common/packing/unpack2x128To256.zok" as unpack2x128To256
+
+import "../common/hashes/sha256/padding/shaPad256To512.zok" as shaPad256To512
+import "../common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
+import "../common/hashes/sha256/padding/shaPad640To1024" as shaPad640To1024
+import "../common/hashes/sha256/padding/shaPad896To1024" as shaPad896To1024
+import "../common/hashes/sha256/padding/shaPad1280To1536" as shaPad1280To1536
+import "../common/hashes/sha256/padding/shaPad5632To6144" as shaPad5632To6144
+
+import "../common/merkle-tree/mimc-root.zok" as mimcroot
+
+
+// Inputs for main are:
+// Alice's original coin is inputValue (private)
+// inputSalt - Alice's salt for her input coin (private)
+// secretKeyA -  Alice's secret key (private)
+// path- the Merkle path for Alice's input commitment (private)
+
+// nullifier - the nullifier for Alices commitment (public)
+
+// New outputCommitments that were created by Alice:
+// outputSalts[] - the outputSalts corresponding to outputCommitments[] (private)
+// outputValues[] - the amount contained in the corresponding outputCommitments[] (private)
+// publicKeys[] - Bobs' public keys (private)
+// outputCommitments[] - the commitments corresponding to outputValues[] (public)
+
+// root - the Merkle root (public)
+
+// publicInputHash = hash(root, nullifier, outputCommitments[])
+
+// Note - we now use 216 bits for the Merkle tree calculation. This is because 432 is the biggest input we can use for sha256 if we want 432/2 to end on a byte boundary for easier Solidity computation without needing to do full rounds and we need to concatenate the two child hashes. We consider 216 bits to be sufficiently secure. The nullifier, commitment and root
+// also use 216-bit security. This is because it becomes problematic to use bit length greater than Fp (not impossible but the proof code is much larger)
+
+// Each field element passed to main() can be at most 253bits, to make things convenient we ensure that only the lowest 216 bits are significant
+// (except the publicInputHash, which we maximize as 248-bits). That means we can 'reconstruct' a 256 bit value by padding them with zeros.  The advantage of doing that
+// is that our code can be written to work as if we're using a 'full' 256 bit sha hash - it's just that we define the top 40 bits to be zero.  That makes it easy to change to other bit
+// lengths in the future. It's painful to pass in a full 256 bits because we have to split it across two fields (Fp<256) and that makes the code much larger.
+
+def main(field publicInputHash, private field contractAddress, private field inputValue, private field[2] secretKeyA, private field[2] inputSalt, private field[32] path, private field order, private field[2] nullifier, private field[20] outputValues, private field[20][2] publicKeys, private field[20][2] outputSalts, private field[20][2] outputCommitments, private field root)->():
+
+     // Check the commitment value will not overflow the 128 bits
+
+    0 == if inputValue < 2**128 then 0 else 1 fi
+
+    field[256] publicInputHashBits = unpack256(publicInputHash)
+    field[256] contractAddressBits = unpack256(contractAddress)
+	// First we construct a proof that the nullifier of the input coin is correct:
+	// sha(inputSalt|secretKey) = nullifier.
+
+	field[256] secretKeyABits = unpack2x128To256(secretKeyA)
+
+    field[512] secretKeyAPadded = shaPad256To512(secretKeyABits)
+	field[256] inputSaltBits = unpack2x128To256(inputSalt)
+	field[1024] preimage1024 = shaPad512To1024(concatenate256x256(inputSaltBits, secretKeyABits))
+	//check that we have correctly provided a public nullifier
+	field[256] nullifierBits = unpack2x128To256(nullifier)
+    nullifierBitsCheck = sha256of1024(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024])
+    nullifierBits == nullifierBitsCheck
+
+	// sha(inputValue|publicKeyA|inputSalt) = Alices commitment in the Merkle Tree
+	// Calculation of publicKeyA from H(secretKeyA)
+	field[256] publicKeyABits = sha256of512(secretKeyAPadded[0..256], secretKeyAPadded[256..512])
+
+	// And calculation of input commitment
+	field[128] inputValueBits = unpack128(inputValue)
+    inputValueBits[0] == 0 // overflow check
+
+	field[896] inputCommitmentPreImage = concatenate256x128x256x256(contractAddressBits, inputValueBits, publicKeyABits, inputSaltBits)
+	field[1024] inputCommitmentPadded = shaPad896To1024(inputCommitmentPreImage)
+	field[256] inputCommitment = sha256of1024(inputCommitmentPadded[0..256], inputCommitmentPadded[256..512], inputCommitmentPadded[512..768], inputCommitmentPadded[768..1024]) // commitmentC
+
+	// concatenate siblings and hash all the way up to the root using a MiMC hash
+    field mimcHash = pack256(inputCommitment)
+    mimcHash = mimcroot(path, order, mimcHash)
+
+	// check we have indeed recovered the root:
+    root == mimcHash // root[0] contains nothing and is just there for legacy reasons TODO - remove it.
+
+    // Next up - prove that value is in commitment for all output commitments
+
+    // Work out commitment[i] = H(value[i]|publicKeys[i]|outputSalts[i])
+    // Also check the commitment is correct within the loop because storing the commitments as an array of arrays, so we can check at the end like we normally do, would be hard
+    // Also, while we're looping, let's add up how much we will spend and check for overflows:
+
+	field total = 0
+	for field i in 0..20 do
+        field[256] outputCommitment = unpack2x128To256(outputCommitments[i])
+        0 == if outputValues[i] < 2**128 then 0 else 1 fi
+        field[128] outputValueBits = unpack128(outputValues[i])
+        field[256] publicKeyBits = unpack2x128To256(publicKeys[i])
+        field[256] outputSaltBits = unpack2x128To256(outputSalts[i])
+		field[896] outputCommitmentPreImage = concatenate256x128x256x256(contractAddressBits, outputValueBits, publicKeyBits, outputSaltBits)
+		field[1024] outputCommitmentPadded = shaPad896To1024(outputCommitmentPreImage)
+		field[256] commitmentBitsCheck = sha256of1024(outputCommitmentPadded[0..256], outputCommitmentPadded[256..512], outputCommitmentPadded[512..768], outputCommitmentPadded[768..1024])
+
+        outputCommitment == commitmentBitsCheck // valid commitment check
+
+        total = total + outputValues[i]
+        outputValueBits[0] == 0 // overflow check
+    endfor
+
+    // Sum check - we don't want anyone to create money.
+    total == inputValue
+
+    // Check that the 'public inputs' hash to the publicInputHash:
+    // preimage = concatenate([root, nullifier, ...outputCommitments])
+
+    // field[5120] outputCommitmentsBits = concatenateFields20x2x128(outputCommitments)
+    field[256] rootBits = unpack256(root)
+    field[2] rootinput = [pack128(rootBits[0..128]), pack128(rootBits[128..256])]
+    field[5632] preimage5632 = concatenateFields22x2x128([rootinput, nullifier, ...outputCommitments])
+    field[6144] preimage6144 = shaPad5632To6144(preimage5632)
+
+    field[256] publicInputHashBitsCheck = sha256of6144(preimage6144[0..256], preimage6144[256..512], preimage6144[512..768], preimage6144[768..1024], preimage6144[1024..1280], preimage6144[1280..1536], preimage6144[1536..1792], preimage6144[1792..2048], preimage6144[2048..2304], preimage6144[2304..2560], preimage6144[2560..2816], preimage6144[2816..3072], preimage6144[3072..3328], preimage6144[3328..3584], preimage6144[3584..3840], preimage6144[3840..4096], preimage6144[4096..4352], preimage6144[4352..4608], preimage6144[4608..4864], preimage6144[4864..5120], preimage6144[5120..5376], preimage6144[5376..5632], preimage6144[5632..5888], preimage6144[5888..6144])
+
+    publicInputHashBits[8..256] == publicInputHashBitsCheck[8..256]
+
+    return

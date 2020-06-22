@@ -58,7 +58,7 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
   logger.debug('\nIN MINT...');
 
   // Calculate new arguments for the proof:
-  const commitment = utils.concatenateThenHash(
+  const commitment = utils.shaHash(
     erc721AddressPadded,
     utils.strip0x(tokenId).slice(-32 * 2),
     zkpPublicKey,
@@ -87,7 +87,7 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
   logger.debug('New Proof Variables:');
   logger.debug('commitment:', commitment, ' : ', utils.hexToFieldPreserve(commitment, p, pt));
 
-  const publicInputHash = utils.concatenateThenHash(erc721AddressPadded, tokenId, commitment);
+  const publicInputHash = utils.shaHash(erc721AddressPadded, tokenId, commitment);
   logger.debug('publicInputHash:', publicInputHash);
 
   const allInputs = utils.formatInputsForZkSnark([
@@ -156,7 +156,7 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
     return log.event === 'NewLeaf';
   });
   const commitmentIndex = newLeafLog[0].args.leafIndex;
-
+  logger.debug('root in solidity:', newLeafLog[0].args.root);
   logger.debug('Mint output: [z_A, z_A_index]:', commitment, commitmentIndex.toString());
   logger.debug('MINT COMPLETE\n');
 
@@ -213,8 +213,8 @@ async function transfer(
   const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
 
   // Calculate new arguments for the proof:
-  const nullifier = utils.concatenateThenHash(originalCommitmentSalt, senderZkpPrivateKey);
-  const outputCommitment = utils.concatenateThenHash(
+  const nullifier = utils.shaHash(originalCommitmentSalt, senderZkpPrivateKey);
+  const outputCommitment = utils.shaHash(
     erc721AddressPadded,
     utils.strip0x(tokenId).slice(-config.LEAF_HASHLENGTH * 2),
     receiverZkpPublicKey,
@@ -223,7 +223,6 @@ async function transfer(
 
   // Get the sibling-path from the token commitment (leaf) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
-    account,
     nfTokenShieldInstance,
     commitment,
     commitmentIndex,
@@ -286,8 +285,13 @@ async function transfer(
   logger.debug(`siblingPath:`, siblingPath);
   logger.debug(`commitmentIndex:`, commitmentIndex);
 
-  const publicInputHash = utils.concatenateThenHash(root, nullifier, outputCommitment);
+  const publicInputHash = utils.shaHash(root, nullifier, outputCommitment);
   logger.debug('publicInputHash:', publicInputHash);
+
+  const rootElement =
+    process.env.HASH_TYPE === 'mimc'
+      ? new Element(root, 'field', 256, 1)
+      : new Element(root, 'field', 128, 2);
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
@@ -300,19 +304,30 @@ async function transfer(
     new Element(originalCommitmentSalt, 'field'),
     new Element(newCommitmentSalt, 'field'),
     new Element(senderZkpPrivateKey, 'field'),
-    new Element(root, 'field'),
+    rootElement,
     new Element(outputCommitment, 'field'),
   ]);
 
-  await zokrates.computeWitness(codePath, outputDirectory, witnessName, allInputs);
+  await zokrates.computeWitness(
+    codePath,
+    outputDirectory,
+    `${commitment}-${witnessName}`,
+    allInputs,
+  );
 
-  await zokrates.generateProof(pkPath, codePath, `${outputDirectory}/witness`, provingScheme, {
-    createFile: createProofJson,
-    directory: outputDirectory,
-    fileName: proofName,
-  });
+  await zokrates.generateProof(
+    pkPath,
+    codePath,
+    `${outputDirectory}/${commitment}-witness`,
+    provingScheme,
+    {
+      createFile: createProofJson,
+      directory: outputDirectory,
+      fileName: `${commitment}-${proofName}`,
+    },
+  );
 
-  let { proof } = JSON.parse(fs.readFileSync(`${outputDirectory}/${proofName}`));
+  let { proof } = JSON.parse(fs.readFileSync(`${outputDirectory}/${commitment}-${proofName}`));
 
   proof = Object.values(proof);
   // convert to flattened array:
@@ -349,6 +364,14 @@ async function transfer(
     return log.event === 'NewLeaf';
   });
   const outputCommitmentIndex = newLeafLog[0].args.leafIndex;
+
+  if (fs.existsSync(`${outputDirectory}/${commitment}-${proofName}`))
+    fs.unlinkSync(`${outputDirectory}/${commitment}-${proofName}`);
+
+  if (fs.existsSync(`${outputDirectory}/${commitment}-witness`))
+    fs.unlinkSync(`${outputDirectory}/${commitment}-witness`);
+
+  logger.debug(`Deleted File ${outputDirectory}/${commitment}-${proofName}`);
 
   logger.debug('TRANSFER COMPLETE\n');
 
@@ -409,11 +432,10 @@ async function burn(
   logger.debug('\nIN BURN...');
 
   // Calculate new arguments for the proof:
-  const nullifier = utils.concatenateThenHash(salt, receiverZkpPrivateKey);
+  const nullifier = utils.shaHash(salt, receiverZkpPrivateKey);
 
   // Get the sibling-path from the token commitment (leaf) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
-    account,
     nfTokenShieldInstance,
     commitment,
     commitmentIndex,
@@ -459,7 +481,7 @@ async function burn(
   logger.debug(`commitmentIndexElement:`, commitmentIndexElement);
 
   // Using padded version of erc721 and payTo to match the publicInputHash
-  const publicInputHash = utils.concatenateThenHash(
+  const publicInputHash = utils.shaHash(
     erc721AddressPadded,
     root,
     nullifier,
@@ -467,6 +489,11 @@ async function burn(
     payToLeftPadded,
   );
   logger.debug('publicInputHash:', publicInputHash);
+
+  const rootElement =
+    process.env.HASH_TYPE === 'mimc'
+      ? new Element(root, 'field', 256, 1)
+      : new Element(root, 'field', 128, 2);
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
@@ -478,18 +505,29 @@ async function burn(
     ...siblingPathElements.slice(1),
     commitmentIndexElement,
     new Element(nullifier, 'field'),
-    new Element(root, 'field'),
+    rootElement,
   ]);
 
-  await zokrates.computeWitness(codePath, outputDirectory, witnessName, allInputs);
+  await zokrates.computeWitness(
+    codePath,
+    outputDirectory,
+    `${commitment}-${witnessName}`,
+    allInputs,
+  );
 
-  await zokrates.generateProof(pkPath, codePath, `${outputDirectory}/witness`, provingScheme, {
-    createFile: createProofJson,
-    directory: outputDirectory,
-    fileName: proofName,
-  });
+  await zokrates.generateProof(
+    pkPath,
+    codePath,
+    `${outputDirectory}/${commitment}-witness`,
+    provingScheme,
+    {
+      createFile: createProofJson,
+      directory: outputDirectory,
+      fileName: `${commitment}-${proofName}`,
+    },
+  );
 
-  let { proof } = JSON.parse(fs.readFileSync(`${outputDirectory}/${proofName}`));
+  let { proof } = JSON.parse(fs.readFileSync(`${outputDirectory}/${commitment}-${proofName}`));
 
   proof = Object.values(proof);
   // convert to flattened array:
@@ -524,6 +562,14 @@ async function burn(
     },
   );
   utils.gasUsedStats(txReceipt, 'burn');
+
+  if (fs.existsSync(`${outputDirectory}/${commitment}-${proofName}`))
+    fs.unlinkSync(`${outputDirectory}/${commitment}-${proofName}`);
+
+  if (fs.existsSync(`${outputDirectory}/${commitment}-witness`))
+    fs.unlinkSync(`${outputDirectory}/${commitment}-witness`);
+
+  logger.debug(`Deleted File ${outputDirectory}/${commitment}-${proofName} \n`);
 
   logger.debug('BURN COMPLETE\n');
 

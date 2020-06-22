@@ -1,0 +1,32 @@
+import "hashes/sha256/512bit.code" as sha256of512
+import "utils/pack/unpack128.code" as unpack128
+import "utils/pack/nonStrictUnpack256.code" as unpack256
+import "../hashes/sha256/padding/shaPad432To512.zok" as shaPad432To512
+
+def orderedConcatenate216x216(field order, field[216] pathNode, field[216] siblingNode)->(field[432]):
+	field[216] left = if order == 0 then pathNode else siblingNode fi
+	field[216] right = if order == 0 then siblingNode else pathNode fi
+	return [...left, ...right]
+
+// unpacks a siblingPath's node to bits, ready for sha-ing:
+def unpackSiblingNode(field siblingNode)->(field[216]):
+	field[256] siblingNodeBits = unpack256(siblingNode)
+	return siblingNodeBits[40..256]
+
+// Merkle Tree root calculation given:
+//  Path - sibling path up the tree
+//  Order - LeafIndex, decomposed to binary for calculation up the tree
+//  Hash - input commitment (leafValue)
+
+def main(field[32] path, field order, field[256] hash)->(field[256]):
+
+	field[128] orderBits = unpack128(order) // need to access an array of bits
+
+	for field i in 0..32 do
+		field j = 31-i
+    field k = 127-i
+		preimage512 = shaPad432To512(orderedConcatenate216x216(orderBits[k], hash[40..256], unpackSiblingNode(path[j])))
+		hash = sha256of512(preimage512[0..256], preimage512[256..512])
+	endfor
+
+  return(hash)

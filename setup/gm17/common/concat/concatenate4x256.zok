@@ -1,0 +1,2 @@
+def main(field[256] a, field[256] b, field[256] c, field[256] d)->(field[1024]):
+	return [...a, ...b, ...c, ...d]

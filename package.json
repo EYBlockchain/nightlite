@@ -12,7 +12,7 @@
     "lint:md": "markdownlint -i node_modules -i build .",
     "validate": "cod-scripts validate",
     "lint:sol": "solium -d contracts",
-    "test": "docker-compose exec zkp jest --verbose --runInBand --forceExit ./__tests__/*.test.js"
+    "test": "jest --verbose --runInBand ./__tests__/*.test.js"
   },
   "devDependencies": {
     "cod-scripts": "^3.3.0",
@@ -20,14 +20,16 @@
     "markdownlint-cli": "^0.18.0",
     "nodemon": "^1.19.2",
     "prettier-plugin-solidity": "^1.0.0-alpha.31",
-    "yargs": "^15.1.0"
+    "jest": "^24.8.0"
   },
   "dependencies": {
     "@eyblockchain/zokrates.js": "^1.2.0",
     "big-integer": "^1.6.48",
     "config": "^3.2.2",
+    "eslint": "^6.8.0",
     "hex-to-binary": "^1.0.1",
     "jsonfile": "^5.0.0",
+    "keccak": "^2.1.0",
     "request": "^2.88.0",
     "safe-buffer": "^5.2.0",
     "truffle-contract": "^4.0.15",

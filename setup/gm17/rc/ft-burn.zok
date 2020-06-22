@@ -1,0 +1,103 @@
+import "hashes/sha256/1024bit.code" as sha256of1024
+import "hashes/sha256/512bit.code" as sha256of512
+import "../common/hashes/sha256/sha256of2560" as sha256of2560
+import "utils/pack/unpack128.code" as unpack128
+import "utils/pack/nonStrictUnpack256.code" as unpack256
+import "utils/pack/pack256.code" as pack256
+import "../common/packing/unpack2x128To256.zok" as unpack2x128To256
+import "../common/encryption/el-gamal1.zok" as enc1
+import "../common/encryption/edwards-compress.zok" as edwardsCompress
+import "../common/hashes/sha256/padding/shaPad256To512" as shaPad256To512
+import "../common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
+import "../common/hashes/sha256/padding/shaPad896To1024" as shaPad896To1024
+import "../common/hashes/sha256/padding/shaPad2304To2560" as shaPad2304To2560
+import "../common/concat/concatenate256x128x256x256" as concatenate256x128x256x256
+import "../common/concat/concatenate256x256" as concatenate256x256
+import "../common/concat/concatenate9xx256" as concatenate9xx256
+import "../common/merkle-tree/sha-root" as sharoot
+import "../common/merkle-tree/pk-root" as pkroot
+
+// Inputs for main are:
+
+// payTo, the public Ethereum address to which the burned tokens get paid
+// value, the amount contained in the commitment (public)
+// secretKey: the secret key for the commitment (private)
+// salt: the salt for the commitment (private)
+// path0b-path31b - the Merkle path for the commitment (private)
+
+// nullifier - the nullifier for the commitment (public)
+
+// root - the Merkle root (public)
+
+// publicInputHash = hash(root, nullifier, value, payTo)
+
+// Note - we now use 216 bits for the Merkle tree calculation. This is because 432 is the biggest input we can use for sha256 if we want 432/2 to end on a byte boundary for easier Solidity computation without needing to do full rounds and we need to concatenate the two child hashes. We consider 216 bits to be sufficiently secure. The nullifier, commitment and root retain 256-bit security.
+
+// Each field element passed to main() can be at most 128bits, to make use of unpack128() so most variables occupy two fields (except the publicInputHash, which we maximize as 248-bits)
+
+def main(field publicInputHash, private field contractAddress, private field[2] payTo, private field value, private field[2] secretKey, private field[2] salt, private field[32] path, private field order, private field[2] nullifier, private field[2] root, private field publicKeyRoot, private field[32] pathPublicKey, private field orderPublicKey, private field[4] encryption, private field[2] authorityPublicKey1, private field randomSecret)->():
+
+	// Check the commitment values will not overflow the 128 bits
+    0 == if value < 2**128 then 0 else 1 fi
+
+	// Unpack the inputs of main()
+	field[256] publicInputHashBits = unpack256(publicInputHash)
+	field[256] payToBits = unpack2x128To256(payTo)
+	field[128] valueBits = unpack128(value)
+	field[256] secretKeyBits = unpack2x128To256(secretKey)
+	field[256] saltBits = unpack2x128To256(salt)
+	field[128] orderBits = unpack128(order)
+ 	field[256] nullifierBits = unpack2x128To256(nullifier)
+ 	field[256] rootBits = unpack2x128To256(root)
+	field[256] contractAddressBits = unpack256(contractAddress)
+
+ 	// First we construct a proof that the nullifier is correct
+ 	// Concatenate salt|secretKey.
+
+	field[1024] preimage1024 = shaPad512To1024(concatenate256x256(saltBits, secretKeyBits))
+	field[256] nullifierBitsCheck = sha256of1024(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024])
+
+	// Prove that the commitment is in the Merkle tree
+
+	// First, calculate Alice's public key from her private key: publicKey = H(secretKey).
+	field[512] secretKeyPadded = shaPad256To512(secretKeyBits)
+ 	field[256] publicKeyBits = sha256of512(secretKeyPadded[0..256], secretKeyPadded[256..512])
+
+ 	// Next calculate the commitment = H(value|publicKey|salt)
+	field[896] commitmentPreImage = concatenate256x128x256x256(contractAddressBits, valueBits, publicKeyBits, saltBits)
+	field[1024] commitmentPadded = shaPad896To1024(commitmentPreImage)
+	field[256] commitment = sha256of1024(commitmentPadded[0..256], commitmentPadded[256..512], commitmentPadded[512..768], commitmentPadded[768..1024])
+
+	// concatenate siblings and hash all the way up to the root:
+	field[256] rootBitsCheck = sharoot(path, order, commitment)
+
+	// And the encryption of the transaction (extend the value of the commitmentFBitsCheck up to 256 bits).
+	// Note that, unlike transfer, we only have two variables to encrypt -the value and the sender's public key.
+	field[4] encryptionCheck = enc1( publicKeyBits, authorityPublicKey1, randomSecret)
+
+	// Now we need to prove that the zkp public key which we are using is whitelisted
+	field publicKeyCommitment = pack256(publicKeyBits) // this converts the public key array into something that looks like a MiMC hash
+	field publicKeyRootCheck = pkroot(pathPublicKey, orderPublicKey, publicKeyCommitment)
+
+	// Now test the inputs are correct
+ 	nullifierBits == nullifierBitsCheck
+ 	rootBits == rootBitsCheck
+	encryption == encryptionCheck
+	publicKeyRoot == publicKeyRootCheck
+
+	// Check that the 'public inputs' hash to the publicInputHash:
+	// (This also intertwines the 'payTo' input into the proof)
+	// we have to expand the valueBits for this, because that's how Node and Solidity calculate it (due, ultimately, to the stack size limitations of Solidity)
+	field[256] longValueBits = [...[0;128], ...valueBits]
+	// To make the hash smaller, let's 'compress' each curve point ordered pair into a single 256 bit array (rather than two)...
+	field[256] compressedEncryptionBits1 = edwardsCompress(encryption[0], encryption[1])
+	field[256] compressedEncryptionBits2 = edwardsCompress(encryption[2], encryption[3])
+	field[256] compressedAuthorityPublicKeyBits1 = edwardsCompress(authorityPublicKey1[0], authorityPublicKey1[1])
+	field[2304] preimage2304 = concatenate9xx256(contractAddressBits, rootBits, nullifierBits, longValueBits, payToBits, unpack256(publicKeyRoot), compressedEncryptionBits1, compressedEncryptionBits2, compressedAuthorityPublicKeyBits1)
+	field[2560] preimage2560 = shaPad2304To2560(preimage2304)
+	field[256] publicInputHashBitsCheck = sha256of2560(preimage2560[0..256], preimage2560[256..512], preimage2560[512..768], preimage2560[768..1024], preimage2560[1024..1280], preimage2560[1280..1536], preimage2560[1536..1792], preimage2560[1792..2048], preimage2560[2048..2304], preimage2560[2304..2560])
+
+	publicInputHashBits[8..256] == publicInputHashBitsCheck[8..256]
+
+
+ 	return

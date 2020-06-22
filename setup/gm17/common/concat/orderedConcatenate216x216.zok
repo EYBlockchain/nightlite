@@ -1,0 +1,5 @@
+// A function that concatenates path elements ready for hashing
+def main(field order, field[216] pathNode, field[216] siblingNode)->(field[432]):
+	field[216] left = if order == 0 then pathNode else siblingNode fi
+	field[216] right = if order == 0 then siblingNode else pathNode fi
+	return [...left, ...right]

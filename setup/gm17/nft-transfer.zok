@@ -1,33 +1,20 @@
-import "hashes/sha256/512bit.code" as sha256of512
 import "hashes/sha256/1024bit.code" as sha256of1024
+import "hashes/sha256/512bit.code" as sha256of512
 import "hashes/sha256/1536bit.code" as sha256of1536
+
+import "./common/concat/concatenate256x256.zok" as concatenate256x256
+import "./common/concat/concatenate3x256.zok" as concatenate3x256
+import "./common/concat/concatenate4x256.zok" as concatenate4x256
+
 import "utils/pack/unpack128.code" as unpack128
 import "utils/pack/nonStrictUnpack256.code" as unpack256
-import "./utils/sha256/padding/shaPad256To512.zok" as shaPad256To512
-import "./utils/sha256/padding/shaPad432To512.zok" as shaPad432To512
-import "./utils/sha256/padding/shaPad512To1024.zok" as shaPad512To1024
-import "./utils/sha256/padding/shaPad768To1024.zok" as shaPad768To1024
-import "./utils/sha256/padding/shaPad1024To1536.zok" as shaPad1024To1536
 
-def concatenate256x256x256x256(field[256] a, field[256] b, field[256] c, field[256] d)->(field[1024]):
-	return [...a, ...b, ...c, ...d]
+import "./common/hashes/sha256/padding/shaPad256To512.zok" as shaPad256To512
+import "./common/hashes/sha256/padding/shaPad1024To1536.zok" as shaPad1024To1536
+import "./common/hashes/sha256/padding/shaPad512To1024" as shaPad512To1024
+import "./common/hashes/sha256/padding/shaPad768To1024" as shaPad768To1024
 
-def concatenate256x256x256(field[256] a, field[256] b, field[256] c)->(field[768]):
-	return [...a, ...b, ...c]
-
-def concatenate256x256(field[256] a, field[256] b)->(field[512]):
-	return [...a, ...b]
-
-def orderedConcatenate216x216(field order, field[216] pathNode, field[216] siblingNode)->(field[432]):
-	field[216] left = if order == 0 then pathNode else siblingNode fi
-	field[216] right = if order == 0 then siblingNode else pathNode fi
-	return [...left, ...right]
-
-// unpacks a siblingPath's node to bits, ready for sha-ing:
-def unpackSiblingNode(field siblingNode)->(field[216]):
-	field[256] siblingNodeBits = unpack256(siblingNode)
-	return siblingNodeBits[40..256]
-
+import "./common/merkle-tree/sha-root.zok" as sharoot
 
 // Inputs for main are:
 // asset - the tokenId of the ERC-721 token
@@ -48,6 +35,7 @@ def unpackSiblingNode(field siblingNode)->(field[216]):
 def main(field publicInputHash, private field contractAddress, private field assetHigh, private field assetLow, private field[32] siblingPath, private field order, private field nullifierHigh, private field nullifierLow, private field publicKeyBHigh, private field publicKeyBLow, private field  saltAHigh, private field saltALow, private field saltBHigh, private field  saltBLow, private field secretKeyAHigh, private field secretKeyALow, private field rootHigh, private field rootLow, private field commitmentBHigh, private field commitmentBLow)->():
 
 	// Unpack the inputs of main() to 128 bits. We'll unpack each field to its own 128 bit strings for simplicity for now. Later efficiencies could be made by grouping some inputs.
+
 	field[256] publicInputHashBits = unpack256(publicInputHash)
 
 	field[256] contractAddressBits = unpack256(contractAddress)
@@ -59,6 +47,7 @@ def main(field publicInputHash, private field contractAddress, private field ass
 	field[128] secretKeyAHighBits = unpack128(secretKeyAHigh)
 	field[128] secretKeyALowBits = unpack128(secretKeyALow)
 	field[256] secretKeyABits = [...secretKeyAHighBits, ...secretKeyALowBits]
+	field[512] secretKeyAPadded = shaPad256To512(secretKeyABits)
 
 	field[128] saltBHighBits = unpack128(saltBHigh)
 	field[128] saltBLowBits = unpack128(saltBLow)
@@ -84,41 +73,30 @@ def main(field publicInputHash, private field contractAddress, private field ass
 	field[128] rootLowBits = unpack128(rootLow)
 	field[256] rootBits = [...rootHighBits, ...rootLowBits]
 
-	field[128] orderBits = unpack128(order)
-	// End unpacking
+
+	// H(saltA|secretKeyA) = nullifier.
+
+	field[1024] preimage1024 = shaPad512To1024(concatenate256x256(saltABits, secretKeyABits))
+	field[256] nullifierBitsCheck = sha256of1024(preimage1024[0..256], preimage1024[256..512], preimage1024[512..768], preimage1024[768..1024])
 
 
-	// H(saltA|secretKeyA) = nullifier
-	field[512] preimage512 = concatenate256x256(saltABits, secretKeyABits)
-	field[1024] nullifierPadded = shaPad512To1024(preimage512)
-	field[256] nullifierBitsCheck = sha256of1024(nullifierPadded[0..256], nullifierPadded[256..512], nullifierPadded[512..768], nullifierPadded[768..1024])
-
-
-	// H(contractAddress|asset|publicKeyA|saltA) = commitmentA is in the Merkle Tree
+	// H(asset|publicKeyA|saltA) = commitmentA is in the Merkle Tree
 
 	// Calculation of publicKeyA from H(secretKeyA)
-	field[512] secretKeyPadded = shaPad256To512(secretKeyABits)
-	field[256] publicKeyABits = sha256of512(secretKeyPadded[0..256], secretKeyPadded[256..512])
+	field[256] publicKeyABits = sha256of512(secretKeyAPadded[0..256], secretKeyAPadded[256..512])
 
-	// And calculation of commitment A
-	field[1024] commitmentAPreImage = concatenate256x256x256x256(contractAddressBits, assetBits, publicKeyABits, saltABits)
+
+	// And calculation of the commitment
+	field[1024] commitmentAPreImage = concatenate4x256(contractAddressBits, assetBits, publicKeyABits, saltABits)
 	field[1536] commitmentAPadded = shaPad1024To1536(commitmentAPreImage)
 
-	field[256] commitmentAHash = sha256of1536(commitmentAPadded[0..256], commitmentAPadded[256..512], commitmentAPadded[512..768], commitmentAPadded[768..1024], commitmentAPadded[1024..1280], commitmentAPadded[1280..1536]) // commitmentA
+	field[256] commitmentA = sha256of1536(commitmentAPadded[0..256], commitmentAPadded[256..512], commitmentAPadded[512..768], commitmentAPadded[768..1024], commitmentAPadded[1024..1280], commitmentAPadded[1280..1536]) // commitmentA
 
 	// concatenate siblings and hash all the way up to the root:
-	for field i in 0..32 do
-		field j = 31-i
-		field k = 127-i
-		preimage512 = shaPad432To512(orderedConcatenate216x216(orderBits[k], commitmentAHash[40..256], unpackSiblingNode(siblingPath[j])))
-		commitmentAHash = sha256of512(preimage512[0..256], preimage512[256..512])
-	endfor
-	// save the computed root:
-	field[256] rootBitsCheck = commitmentAHash
+	field[256] rootBitsCheck = sharoot(siblingPath, order, commitmentA)
 
-
-	// Know contractAddress|asset|publicKeyB|saltB such that H(contractAddress|asset|publicKeyB|saltB) = commitmentB
-	field[1024] commitmentBPreImage = concatenate256x256x256x256(contractAddressBits, assetBits, publicKeyBBits, saltBBits)
+	// Know asset|publicKeyB|saltB such that H(asset|publicKeyB|saltB) = commitmentB
+	field[1024] commitmentBPreImage = concatenate4x256(contractAddressBits, assetBits, publicKeyBBits, saltBBits)
 	field[1536] commitmentBPadded = shaPad1024To1536(commitmentBPreImage)
 
 	field[256] commitmentBBitsCheck = sha256of1536(commitmentBPadded[0..256], commitmentBPadded[256..512], commitmentBPadded[512..768], commitmentBPadded[768..1024], commitmentBPadded[1024..1280], commitmentBPadded[1280..1536]) // commitmentB
@@ -135,7 +113,7 @@ def main(field publicInputHash, private field contractAddress, private field ass
 
 	// Check that the 'public inputs' hash to the publicInputHash:
 
-	preimage768 = concatenate256x256x256(rootBits, nullifierBits, commitmentBBits)
+	field[768] preimage768 = concatenate3x256(rootBits, nullifierBits, commitmentBBits)
 	field[1024] publicHashPadded = shaPad768To1024(preimage768)
 
 	field[256] publicInputHashBitsCheck = sha256of1024(publicHashPadded[0..256], publicHashPadded[256..512], publicHashPadded[512..768], publicHashPadded[768..1024])

@@ -1,31 +1,19 @@
 
 import "hashes/sha256/1024bit.code" as sha256of1024
 import "hashes/sha256/512bit.code" as sha256of512
+
+import "./common/concat/concatenate256x128x256.zok" as concatenate256x128x256
+import "./common/concat/concatenate256x128x256x256.zok" as concatenate256x128x256x256
+
 import "utils/pack/unpack128.code" as unpack128
 import "utils/pack/nonStrictUnpack256.code" as unpack256
-
-def concatenate256x128x256x256(field[256] a, field[128] b, field[256] c, field[256] d)->(field[896]):
-	return [...a, ...b, ...c, ...d]
-
-def concatenate256x128x256(field[256] a, field[128] b, field[256] c)->(field[640]):
-	return [...a, ...b, ...c]
-
-def shaPad896To1024(field[896] a)->(field[1024]):
-	return [...a, 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  0,  0,  0,  0,  0,  0,  0]
-
-def shaPad640To1024(field[640] a)->(field[1024]):
-	return [...a, 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  1,  0,  0,  0,  0,  0,  0,  0]
+import "./common/packing/unpack2x128To256.zok" as unpack2x128To256
 
 
-// unpack a field[2] (assumed to be two 128-bit values) into 256 bits
-def unpack2xx128To256(field[2] input)->(field[256]):
-	field[128] left = unpack128(input[0])
-	field[128] right = unpack128(input[1])
-  field[256] output = [...left, ...right]
-  return output
+import "./common/hashes/sha256/padding/shaPad640To1024" as shaPad640To1024
+import "./common/hashes/sha256/padding/shaPad896To1024" as shaPad896To1024
 
 // Inputs for main are:
-// - contractAddress - Contract address of the ERC721 token, left padded so that it's 66 characters (0x + 000... + address)
 // - value (public) is the 128 bit coin value
 // - publicKey (private) is the public key of the commitment derived by hashing the Secret Key Sk of the commitment. IT IS KEPT PRIVATE FOR ZK!!!
 // - salt (private) is the salt for the commitment
@@ -40,9 +28,9 @@ def main(field publicInputHash, private field contractAddress, private field val
 	field[256] publicInputHashBits = unpack256(publicInputHash)
 	field[256] contractAddressBits = unpack256(contractAddress)
 	field[128] valueBits = unpack128(value)
-	field[256] saltBits = unpack2xx128To256(salt)
-	field[256] publicKeyBits = unpack2xx128To256(publicKey)
-	field[256] commitmentBits = unpack2xx128To256(commitment)
+	field[256] saltBits = unpack2x128To256(salt)
+	field[256] publicKeyBits = unpack2x128To256(publicKey)
+	field[256] commitmentBits = unpack2x128To256(commitment)
 
 
 	// Compute commitment = H(contractAddress|value|publicKey|salt):

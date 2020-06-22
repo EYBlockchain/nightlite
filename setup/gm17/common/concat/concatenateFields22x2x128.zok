@@ -1,0 +1,27 @@
+import "../packing/unpack2x128To256.zok" as unpack2xx128To256
+
+// note that this concatenate function expects fields rather than binary as inputs.
+def main(field[22][2] a)->(field[5632]):
+	field[256] b0 = unpack2xx128To256(a[0])
+	field[256] b1 = unpack2xx128To256(a[1])
+	field[256] b2 = unpack2xx128To256(a[2])
+	field[256] b3 = unpack2xx128To256(a[3])
+	field[256] b4 = unpack2xx128To256(a[4])
+	field[256] b5 = unpack2xx128To256(a[5])
+	field[256] b6 = unpack2xx128To256(a[6])
+	field[256] b7 = unpack2xx128To256(a[7])
+	field[256] b8 = unpack2xx128To256(a[8])
+	field[256] b9 = unpack2xx128To256(a[9])
+	field[256] b10 = unpack2xx128To256(a[10])
+	field[256] b11 = unpack2xx128To256(a[11])
+	field[256] b12 = unpack2xx128To256(a[12])
+	field[256] b13 = unpack2xx128To256(a[13])
+	field[256] b14 = unpack2xx128To256(a[14])
+	field[256] b15 = unpack2xx128To256(a[15])
+	field[256] b16 = unpack2xx128To256(a[16])
+	field[256] b17 = unpack2xx128To256(a[17])
+	field[256] b18 = unpack2xx128To256(a[18])
+	field[256] b19 = unpack2xx128To256(a[19])
+	field[256] b20 = unpack2xx128To256(a[20])
+	field[256] b21 = unpack2xx128To256(a[21])
+	return [...b0, ...b1, ...b2, ...b3, ...b4, ...b5, ...b6, ...b7, ...b8, ...b9, ...b10, ...b11, ...b12, ...b13, ...b14, ...b15, ...b16, ...b17, ...b18, ...b19, ...b20, ...b21]
