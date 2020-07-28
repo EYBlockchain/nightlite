@@ -5,7 +5,6 @@
  * @module erc721.js
  * @author westlad, Chaitanya-Konda, iAmMichaelConnor
  */
-const contract = require('truffle-contract');
 const zokrates = require('@eyblockchain/zokrates.js');
 const fs = require('fs');
 const config = require('./config');
@@ -13,8 +12,7 @@ const merkleTree = require('./merkleTree');
 const utils = require('./utils');
 const logger = require('./logger');
 const Element = require('./Element');
-const Web3 = require('./provider');
-const erc721Interface = require('./contracts/ERC721Interface.json');
+const { getTruffleContractInstance } = require('./contractUtils');
 
 /**
  * Mint a commitment
@@ -22,7 +20,6 @@ const erc721Interface = require('./contracts/ERC721Interface.json');
  * @param {string} zkpPublicKey - ZKP public key, see README for more info
  * @param {string} salt - Alice's token serial number as a hex string
  * @param {Object} blockchainOptions
- * @param {String} blockchainOptions.nfTokenShieldJson - ABI of nfTokenShield
  * @param {String} blockchainOptions.nfTokenShieldAddress - Address of deployed nfTokenShieldContract
  * @param {String} blockchainOptions.erc721Address - Address of ERC721 contract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
@@ -37,7 +34,7 @@ const erc721Interface = require('./contracts/ERC721Interface.json');
  * @returns {Number} commitmentIndex - the index of the token within the Merkle Tree.  This is required for later transfers/joins so that Alice knows which 'chunks' of the Merkle Tree she needs to 'get' from the NFTokenShield contract in order to calculate a path.
  */
 async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOptions) {
-  const { nfTokenShieldJson, nfTokenShieldAddress, erc721Address } = blockchainOptions;
+  const { nfTokenShieldAddress, erc721Address } = blockchainOptions;
   const erc721AddressPadded = `0x${utils.strip0x(erc721Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -51,11 +48,12 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
     proofName = 'proof.json',
   } = zokratesOptions;
 
-  const nfTokenShield = contract(nfTokenShieldJson);
-  nfTokenShield.setProvider(Web3.connect());
-  const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
-
   logger.debug('\nIN MINT...');
+
+  const nfTokenShieldInstance = await getTruffleContractInstance(
+    'NFTokenShield',
+    nfTokenShieldAddress,
+  );
 
   // Calculate new arguments for the proof:
   const commitment = utils.shaHash(
@@ -117,10 +115,7 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
 
   logger.debug('Getting ERC721 contract instance');
   // Getting the ERC721 contract instance.
-  const nfToken = contract(erc721Interface);
-  nfToken.setProvider(Web3.connect());
-  const nfTokenInstance = await nfToken.at(erc721Address);
-
+  const nfTokenInstance = await getTruffleContractInstance('ERC721Interface', erc721Address);
   await nfTokenInstance.approve(nfTokenShieldAddress, tokenId, {
     from: account,
     gas: 4000000,
@@ -174,7 +169,6 @@ async function mint(tokenId, zkpPublicKey, salt, blockchainOptions, zokratesOpti
  * @param {Integer} commitmentIndex - the position of commitment in the on-chain Merkle Tree
  * @param {Object} blockchainOptions
  * @param {String} blockchainOptions.erc721Address - Address of ERC721 contract
- * @param {String} blockchainOptions.nfTokenShieldJson - ABI of nfTokenShield
  * @param {String} blockchainOptions.nfTokenShieldAddress - Address of deployed nfTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
  * @returns {String} outputCommitment - New commitment
@@ -192,7 +186,7 @@ async function transfer(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const { nfTokenShieldJson, nfTokenShieldAddress, erc721Address } = blockchainOptions;
+  const { nfTokenShieldAddress, erc721Address } = blockchainOptions;
   const erc721AddressPadded = `0x${utils.strip0x(erc721Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -208,9 +202,10 @@ async function transfer(
 
   logger.debug('\nIN TRANSFER...');
 
-  const nfTokenShield = contract(nfTokenShieldJson);
-  nfTokenShield.setProvider(Web3.connect());
-  const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
+  const nfTokenShieldInstance = await getTruffleContractInstance(
+    'NFTokenShield',
+    nfTokenShieldAddress,
+  );
 
   // Calculate new arguments for the proof:
   const nullifier = utils.shaHash(originalCommitmentSalt, senderZkpPrivateKey);
@@ -391,7 +386,6 @@ async function transfer(
  * @param {String} commitmentIndex
  * @param {Object} blockchainOptions
  * @param {String} blockchainOptions.erc721Address - Address of ERC721 contract
- * @param {String} blockchainOptions.nfTokenShieldJson - ABI of nfTokenShield
  * @param {String} blockchainOptions.nfTokenShieldAddress - Address of deployed nfTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
  */
@@ -404,12 +398,7 @@ async function burn(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const {
-    nfTokenShieldJson,
-    nfTokenShieldAddress,
-    erc721Address,
-    tokenReceiver: payTo,
-  } = blockchainOptions;
+  const { nfTokenShieldAddress, erc721Address, tokenReceiver: payTo } = blockchainOptions;
   const erc721AddressPadded = `0x${utils.strip0x(erc721Address).padStart(64, '0')}`;
 
   const account = utils.ensure0x(blockchainOptions.account);
@@ -424,9 +413,10 @@ async function burn(
     proofName = 'proof.json',
   } = zokratesOptions;
 
-  const nfTokenShield = contract(nfTokenShieldJson);
-  nfTokenShield.setProvider(Web3.connect());
-  const nfTokenShieldInstance = await nfTokenShield.at(nfTokenShieldAddress);
+  const nfTokenShieldInstance = await getTruffleContractInstance(
+    'NFTokenShield',
+    nfTokenShieldAddress,
+  );
 
   const payToOrDefault = payTo || account; // have the option to pay out to another address
   logger.debug('\nIN BURN...');

@@ -5,8 +5,6 @@
  * @module erc20.js
  * @author westlad, Chaitanya-Konda, iAmMichaelConnor
  */
-
-const contract = require('truffle-contract');
 const zokrates = require('@eyblockchain/zokrates.js');
 const fs = require('fs');
 const config = require('./config');
@@ -14,8 +12,7 @@ const merkleTree = require('./merkleTree');
 const utils = require('./utils');
 const logger = require('./logger');
 const Element = require('./Element');
-const Web3 = require('./provider');
-const erc20Interface = require('./contracts/ERC20Interface.json');
+const { getTruffleContractInstance } = require('./contractUtils');
 
 /**
  * Mint a fungible token commitment.
@@ -27,14 +24,13 @@ const erc20Interface = require('./contracts/ERC20Interface.json');
  * @param {String} salt - Alice's token serial number as a hex string
  * @param {Object} blockchainOptions
  * @param {String} blockchainOptions.erc20Address - Address of ERC20 contract
- * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions. Must be token owner.
  * @returns {String} commitment - Commitment of the minted coins
  * @returns {Number} commitmentIndex
  */
 async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptions) {
-  const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
+  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -48,9 +44,10 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
     proofName = 'proof.json',
   } = zokratesOptions;
 
-  const fTokenShield = contract(fTokenShieldJson);
-  fTokenShield.setProvider(Web3.connect());
-  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
+  const fTokenShieldInstance = await getTruffleContractInstance(
+    'FTokenShield',
+    fTokenShieldAddress,
+  );
 
   logger.debug('\nIN MINT...');
 
@@ -116,10 +113,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   proof = proof.map(el => utils.hexToDec(el));
 
   // Approve fTokenShieldInstance to take tokens from minter's account.
-  const fToken = contract(erc20Interface);
-  fToken.setProvider(Web3.connect());
-  const fTokenInstance = await fToken.at(erc20Address);
-
+  const fTokenInstance = await getTruffleContractInstance('ERC20Interface', erc20Address);
   await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
     from: account,
     gas: 4000000,
@@ -179,8 +173,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
  * @param {String} receiverZkpPublicKey - Receiver's Zkp Public Key
  * @param {String} senderZkpPrivateKey - Private key of the sender's
  * @param {Object} blockchainOptions
- * @param {String} blockchainOptions.erc20Address - ABI of fTokenShieldInstance
- * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
+ * @param {String} blockchainOptions.erc20Address - Address of ERC20 contract
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
  * @returns {Object[]} outputCommitments - Updated outputCommitments with their commitments and indexes.
@@ -194,7 +187,7 @@ async function transfer(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
+  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -209,11 +202,12 @@ async function transfer(
   } = zokratesOptions;
 
   logger.debug('\nIN TRANSFER...');
-
   logger.debug('Finding the relevant Shield and Verifier contracts');
-  const fTokenShield = contract(fTokenShieldJson);
-  fTokenShield.setProvider(Web3.connect());
-  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
+
+  const fTokenShieldInstance = await getTruffleContractInstance(
+    'FTokenShield',
+    fTokenShieldAddress,
+  );
 
   const inputCommitments = _inputCommitments;
   const outputCommitments = _outputCommitments;
@@ -532,8 +526,7 @@ async function transfer(
  * @param {array} outputCommitments - Array of 20 commitments.
  * @param {string} senderSecretKey - Private key of sender
  * @param {Object} blockchainOptions
- * @param {String} blockchainOptions.erc20Address - ABI of fTokenShieldInstance
- * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
+ * @param {String} blockchainOptions.erc20Address - Address of ERC20 contract
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
  * @returns {Object[]} outputCommitments - Updated outputCommitments with their commitments and indexes.
@@ -546,7 +539,7 @@ async function simpleFungibleBatchTransfer(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
+  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -561,11 +554,12 @@ async function simpleFungibleBatchTransfer(
   } = zokratesOptions;
 
   logger.debug('\nIN BATCH TRANSFER...');
-
   logger.debug('Finding the relevant Shield and Verifier contracts');
-  const fTokenShield = contract(fTokenShieldJson);
-  fTokenShield.setProvider(Web3.connect());
-  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
+
+  const fTokenShieldInstance = await getTruffleContractInstance(
+    'FTokenShield',
+    fTokenShieldAddress,
+  );
 
   const inputCommitment = _inputCommitment;
 
@@ -739,8 +733,7 @@ async function simpleFungibleBatchTransfer(
  * @param {String} receiverZkpPublicKey - Receiver's Zkp Public Key
  * @param {String} senderSecretKey - Private key of the sender's
  * @param {Object} blockchainOptions
- * @param {String} blockchainOptions.erc20Address - ABI of fTokenShieldInstance
- * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
+ * @param {String} blockchainOptions.erc20Address - Address of ERC20 contract
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
  * @returns {Object[]} outputCommitment - Updated outputCommitment with their commitment and index.
@@ -754,7 +747,7 @@ async function consolidationTransfer(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const { fTokenShieldJson, fTokenShieldAddress, erc20Address } = blockchainOptions;
+  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
   const account = utils.ensure0x(blockchainOptions.account);
 
@@ -770,9 +763,11 @@ async function consolidationTransfer(
 
   logger.debug('\nIN CONSOLIDATION TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
-  const fTokenShield = contract(fTokenShieldJson);
-  fTokenShield.setProvider(Web3.connect());
-  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
+
+  const fTokenShieldInstance = await getTruffleContractInstance(
+    'FTokenShield',
+    fTokenShieldAddress,
+  );
 
   const inputCommitments = _inputCommitments;
   const outputCommitment = _outputCommitment;
@@ -912,8 +907,7 @@ async function consolidationTransfer(
  * @param {string} commitment - the value of the commitment being burned
  * @param {string} commitmentIndex - the index of the commitment in the Merkle Tree
  * @param {Object} blockchainOptions
- * @param {String} blockchainOptions.erc20Address - ABI of fTokenShieldInstance
- * @param {String} blockchainOptions.fTokenShieldJson - ABI of fTokenShieldInstance
+ * @param {String} blockchainOptions.erc20Address - Address of ERC20 contract
  * @param {String} blockchainOptions.fTokenShieldAddress - Address of deployed fTokenShieldContract
  * @param {String} blockchainOptions.account - Account that is sending these transactions
  * @param {String} blockchainOptions.tokenReceiver - Account that will receive the tokens
@@ -927,12 +921,7 @@ async function burn(
   blockchainOptions,
   zokratesOptions,
 ) {
-  const {
-    fTokenShieldJson,
-    fTokenShieldAddress,
-    erc20Address,
-    tokenReceiver: _payTo,
-  } = blockchainOptions;
+  const { fTokenShieldAddress, erc20Address, tokenReceiver: _payTo } = blockchainOptions;
   const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
 
   const account = utils.ensure0x(blockchainOptions.account);
@@ -951,11 +940,12 @@ async function burn(
   if (payTo === undefined) payTo = account; // have the option to pay out to another address
   // before we can burn, we need to deploy a verifying key to mintVerifier (reusing mint for this)
   logger.debug('\nIN BURN...');
-
   logger.debug('Finding the relevant Shield and Verifier contracts');
-  const fTokenShield = contract(fTokenShieldJson);
-  fTokenShield.setProvider(Web3.connect());
-  const fTokenShieldInstance = await fTokenShield.at(fTokenShieldAddress);
+
+  const fTokenShieldInstance = await getTruffleContractInstance(
+    'FTokenShield',
+    fTokenShieldAddress,
+  );
 
   // Calculate new arguments for the proof:
   const nullifier = utils.shaHash(salt, receiverZkpPrivateKey);
