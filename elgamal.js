@@ -190,6 +190,7 @@ function edwardsDecompress(y) {
     addMod([mulMod([JUBJUBD, y2]), -JUBJUBA]),
     ZOKRATES_PRIME,
   );
+  if (x2 === 0n && sign === '0') return BABYJUBJUB.INFINITY;
   let xfield = squareRootModPrime(x2);
   const px = BigInt(xfield)
     .toString(2)
