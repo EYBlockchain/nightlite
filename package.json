@@ -17,6 +17,7 @@
   "devDependencies": {
     "cod-scripts": "^3.3.0",
     "ethlint": "^1.2.4",
+    "fast-check": "^1.26.0",
     "markdownlint-cli": "^0.18.0",
     "nodemon": "^1.19.2",
     "prettier-plugin-solidity": "^1.0.0-alpha.31",

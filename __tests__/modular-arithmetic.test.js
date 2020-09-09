@@ -1,4 +1,5 @@
 // tests for various aspects of modular arithmetic and related functions
+const fc = require('fast-check');
 const {
   add,
   enc,
@@ -10,8 +11,8 @@ const {
   edwardsCompress,
   edwardsDecompress,
 } = require('../elgamal');
-const { BABYJUBJUB, ZOKRATES_PRIME, TEST_PRIVATE_KEYS } = require('../config');
-const { randomHex, hash, decToHex } = require('../utils');
+const { BABYJUBJUB, ZOKRATES_PRIME } = require('../config');
+const { randomHex } = require('../utils');
 const { squareRootModPrime } = require('../number-theory');
 
 const SIZE = 100;
@@ -35,53 +36,56 @@ describe('Random Hex tests', () => {
 });
 
 describe('Edwards compression tests', () => {
-  test(`Compress and then decompress an array of ${SIZE} curve points`, async () => {
-    // first, lets generate 100 random scalars up to 31 bytes long
-    const promises = [];
-    for (let i = 0; i < SIZE; i++) promises.push(randomHex(31));
-    const scalars = await Promise.all(promises);
-    // then, turn them into curve points
-    const points = scalars.map(s => scalarMult(s, BABYJUBJUB.GENERATOR));
-    // compress them, decompress them and see if we get the same points back
+  test(`Compress and then decompress ${SIZE} random curve points`, async () => {
+    // Generate random BigInt,a,between 0 and the Zokrates Prime
+    // Check the property that (decompress . compress) === id
     // remember, points mean prizes.
-    const compressed = points.map(p => edwardsCompress(p));
-    const decompressed = compressed.map(e => edwardsDecompress(e));
-    expect(points).toEqual(decompressed);
+    fc.assert(
+      fc.property(fc.bigInt(0n, ZOKRATES_PRIME), a => {
+        const point = scalarMult(a.toString(), BABYJUBJUB.GENERATOR);
+        expect(edwardsDecompress(edwardsCompress(point))).toEqual(point);
+      }),
+      { numRuns: SIZE },
+    );
   });
 });
 
 describe('Elliptic curve arithmetic tests', () => {
-  const p1 = scalarMult(TEST_PRIVATE_KEYS[0], BABYJUBJUB.GENERATOR);
-  const p2 = scalarMult(TEST_PRIVATE_KEYS[1], BABYJUBJUB.GENERATOR);
+  const scalar1 = fc.bigInt(0n, ZOKRATES_PRIME);
+  const scalar2 = fc.bigInt(0n, ZOKRATES_PRIME);
+  const authorityPrivateKeys = fc.set(fc.bigInt(0n, ZOKRATES_PRIME), 2, 30); // Generate between 2 & 30 authority keys - seems reasonable
+  const smallMsgs = fc.array(fc.nat(2500), 2, authorityPrivateKeys.length); // Generate a number (up to the number of authority keys) of small valued messages
 
   test(`Multiply & Add`, async () => {
-    // then, turn them into curve points
-    const p3 = add(p1, p2);
-    const p4 = scalarMult(TEST_PRIVATE_KEYS[0] + TEST_PRIVATE_KEYS[1], BABYJUBJUB.GENERATOR);
-    expect(p3).toEqual(p4);
+    // Generate two random scalars, s1 & s2
+    // then, turn them into curve points, p1 = s1G & p2 = s2G
+    // Test the property that s1G + s2G === (s1 + s2)G
+    fc.assert(
+      fc.property(scalar1, scalar2, (x1, x2) => {
+        const p1 = scalarMult(x1.toString(), BABYJUBJUB.GENERATOR);
+        const p2 = scalarMult(x2.toString(), BABYJUBJUB.GENERATOR);
+        expect(add(p1, p2)).toEqual(scalarMult((x1 + x2).toString(), BABYJUBJUB.GENERATOR));
+      }),
+      { numRuns: 50 },
+    );
   });
 
-  test(`Encrypt, Decrypt`, async () => {
-    // then, turn them into curve points
-    setAuthorityPrivateKeys();
-    const possiblePubKeys = [];
-    for (let i = 0; i < SIZE; i++) possiblePubKeys.push(hash(randomHex(31)));
-    let msgs = [decToHex('2500'), possiblePubKeys[24]];
-    msgs = await Promise.all(msgs);
-    console.log('Original messages:', msgs);
-    const encr = enc(
-      BigInt('2486479783016228757507651969864099385830549377396139930920515135746522658521'),
-      msgs,
+  test(`Encrypt - Decrypt Invariance`, async () => {
+    // Generate a set of authority private keys and corresponding low-valued messages (to reduce brute force time)
+    // Test the property that (decrypt . encrypt) === id, for those with knowledge of authority private keys.
+    fc.assert(
+      fc.property(scalar1, authorityPrivateKeys, smallMsgs, (x1, authKeys, msgs) => {
+        setAuthorityPrivateKeys(authKeys);
+        const encr = enc(
+          x1,
+          msgs.map(msg => msg.toString(16)),
+        );
+        const decr = dec(encr);
+        const decrd = decr.map(decrypt => bruteForce(decrypt, rangeGenerator(3000)));
+        expect(msgs.map(e => BigInt(e))).toEqual(decrd.map(e => BigInt(e)));
+      }),
+      { numRuns: 3 }, // Limit to 3 runs as bruteForce is time consuming
     );
-    console.log('encryptedMessages:', encr);
-    const decr = dec(encr);
-    console.log('decryptedMessages:', decr);
-    const decrdec = [
-      bruteForce(decr[0], rangeGenerator(30000)),
-      bruteForce(decr[1], possiblePubKeys),
-    ];
-    console.log('brute forced decryption:', decrdec);
-    expect(msgs.map(e => BigInt(e))).toEqual(decrdec.map(e => BigInt(e)));
   });
 });
 
