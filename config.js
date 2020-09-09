@@ -1,6 +1,6 @@
 module.exports = {
   LEAF_HASHLENGTH: 32, // expected length of an input to a hash in bytes
-  NODE_HASHLENGTH: 27,
+  NODE_HASHLENGTH: process.env.HASH_TYPE === 'mimc' ? 32 : 27,
   HASH_TYPE: process.env.HASH_TYPE,
   BATCH_PROOF_SIZE: 20, // the number of proofs in a batch (you will need to redo the proofs if oyu change this)
   ZOKRATES_PACKING_SIZE: 128, // ZOKRATES_PRIME is approx 253-254bits (just shy of 256), so we pack field elements into blocks of 128 bits.
