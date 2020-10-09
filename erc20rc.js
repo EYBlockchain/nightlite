@@ -256,7 +256,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
     });
   utils.gasUsedStats(txReceipt, 'mint');
 
-  const newLeafLog = fTokenShieldInstance.getPastEvents('NewLeaf', {
+  const newLeafLog = await fTokenShieldInstance.getPastEvents('NewLeaf', {
     filter: { transactionHash: txReceipt.transactionHash },
   });
 
@@ -266,7 +266,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   logger.debug(
     'Balance of account',
     account,
-    (await fTokenInstance.methods.balanceOf(account).call()).toNumber(),
+    Number(await fTokenInstance.methods.balanceOf(account).call()),
   );
   logger.debug('Mint output: [zA, zAIndex]:', commitment, commitmentIndex.toString());
   logger.debug('MINT COMPLETE\n');
