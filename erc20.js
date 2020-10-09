@@ -14,11 +14,7 @@ const merkleTree = require('./merkleTree');
 const utils = require('./utils');
 const logger = require('./logger');
 const Element = require('./Element');
-const {
-  getTruffleContractInstance,
-  getWeb3ContractInstance,
-  sendSignedTransaction,
-} = require('./contractUtils');
+const { getWeb3ContractInstance, sendSignedTransaction } = require('./contractUtils');
 
 /**
  * Mint a fungible token commitment.
@@ -57,9 +53,7 @@ async function mint(
     proofName = 'proof.json',
   } = zokratesOptions;
 
-  const fTokenShieldInstance = signingMethod
-    ? await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress)
-    : await getTruffleContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   logger.debug('\nIN MINT...');
 
@@ -125,17 +119,18 @@ async function mint(
   proof = proof.map(el => utils.hexToDec(el));
 
   // Approve fTokenShieldInstance to take tokens from minter's account.
-  let fTokenInstance;
+  const fTokenInstance = await getWeb3ContractInstance('ERC20Interface', erc20Address);
+  const fTokenInstanceTx = fTokenInstance.methods.approve(
+    fTokenShieldInstance._address,
+    parseInt(amount, 16),
+  );
+
   if (signingMethod) {
-    fTokenInstance = await getWeb3ContractInstance('ERC20Interface', erc20Address);
-    const encodedRawTransaction = fTokenInstance.methods
-      .approve(fTokenShieldInstance._address, parseInt(amount, 16))
-      .encodeABI();
-    const signedTransaction = await signingMethod(encodedRawTransaction, fTokenInstance._address);
-    await sendSignedTransaction(signedTransaction);
+    await sendSignedTransaction(
+      await signingMethod(fTokenInstanceTx.encodeABI(), fTokenInstance._address),
+    );
   } else {
-    fTokenInstance = await getTruffleContractInstance('ERC20Interface', erc20Address);
-    await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
+    await fTokenInstanceTx.send({
       from: account,
       gas: 4000000,
       gasPrice: config.GASPRICE,
@@ -154,54 +149,38 @@ async function mint(
   logger.debug(publicInputs);
 
   // Mint the commitment
-  logger.debug(
-    'Approving ERC-20 spend from: ',
-    signingMethod ? fTokenShieldInstance._address : fTokenShieldInstance.address,
+  logger.debug('Approving ERC-20 spend from: ', fTokenShieldInstance._address);
+
+  const fTokenShieldInstanceTx = fTokenShieldInstance.methods.mint(
+    erc20AddressPadded,
+    proof,
+    publicInputs,
+    amount,
+    commitment,
   );
 
   let txReceipt;
-  let commitmentIndex;
   if (signingMethod) {
-    const encodedRawTransaction = fTokenShieldInstance.methods
-      .mint(erc20AddressPadded, proof, publicInputs, amount, commitment)
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      fTokenShieldInstance._address,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(fTokenShieldInstanceTx.encodeABI(), fTokenShieldInstance._address),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
-    const newLeafEvents = await fTokenShieldInstance.getPastEvents('NewLeaf', {
-      filter: { transactionHash: txReceipt.transactionHash },
-    });
-    commitmentIndex = newLeafEvents[0].returnValues.leafIndex;
-    logger.debug('ERC-20 spend approved!', parseInt(amount, 16));
-    const balance = await fTokenInstance.methods.balanceOf(account).call();
-    logger.debug('Balance of account', account, balance);
   } else {
-    txReceipt = await fTokenShieldInstance.mint(
-      erc20AddressPadded,
-      proof,
-      publicInputs,
-      amount,
-      commitment,
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'mint');
-    const newLeafLog = txReceipt.logs.filter(log => {
-      return log.event === 'NewLeaf';
+    txReceipt = fTokenShieldInstanceTx.send({
+      from: account,
+      gas: 4000000,
+      gasPrice: config.GASPRICE,
     });
-    commitmentIndex = newLeafLog[0].args.leafIndex;
-    logger.debug('ERC-20 spend approved!', parseInt(amount, 16));
-    logger.debug(
-      'Balance of account',
-      account,
-      (await fTokenInstance.balanceOf.call(account)).toNumber(),
-    );
   }
+
+  const newLeafEvents = await fTokenShieldInstance.getPastEvents('NewLeaf', {
+    filter: { transactionHash: txReceipt.transactionHash },
+  });
+
+  const commitmentIndex = newLeafEvents[0].returnValues.leafIndex;
+  logger.debug('ERC-20 spend approved!', parseInt(amount, 16));
+
+  const balance = await fTokenInstance.methods.balanceOf(account).call();
+  logger.debug('Balance of account', account, balance);
 
   logger.debug('Mint output: [zA, zAIndex]:', commitment, commitmentIndex.toString());
   logger.debug('MINT COMPLETE\n');
@@ -249,7 +228,7 @@ async function transfer(
   logger.debug('\nIN TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  let fTokenShieldInstance = await getTruffleContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   const inputCommitments = _inputCommitments;
   const outputCommitments = _outputCommitments;
@@ -283,12 +262,18 @@ async function transfer(
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   inputCommitments[0].siblingPath = await merkleTree.getSiblingPath(
-    fTokenShieldInstance,
+    {
+      contractName: 'FTokenShield',
+      instance: fTokenShieldInstance,
+    },
     inputCommitments[0].commitment,
     inputCommitments[0].commitmentIndex,
   );
   inputCommitments[1].siblingPath = await merkleTree.getSiblingPath(
-    fTokenShieldInstance,
+    {
+      contractName: 'FTokenShield',
+      instance: fTokenShieldInstance,
+    },
     inputCommitments[1].commitment,
     inputCommitments[1].commitmentIndex,
   );
@@ -517,56 +502,35 @@ async function transfer(
   logger.debug(publicInputs);
 
   // Transfers commitment
+  const encodedRawTransaction = fTokenShieldInstance.methods.transfer(
+    proof,
+    publicInputs,
+    root,
+    inputCommitments[0].nullifier,
+    inputCommitments[1].nullifier,
+    outputCommitments[0].commitment,
+    outputCommitments[1].commitment,
+  );
+
   let txReceipt;
   if (signingMethod) {
-    fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-    const encodedRawTransaction = fTokenShieldInstance.methods
-      .transfer(
-        proof,
-        publicInputs,
-        root,
-        inputCommitments[0].nullifier,
-        inputCommitments[1].nullifier,
-        outputCommitments[0].commitment,
-        outputCommitments[1].commitment,
-      )
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      fTokenShieldInstance._address,
-      true,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(encodedRawTransaction.encodeABI(), fTokenShieldInstance._address, true),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
-    const newLeavesEvents = await fTokenShieldInstance.getPastEvents('NewLeaves', {
-      filter: { transactionHash: txReceipt.transactionHash },
-    });
-    outputCommitments[0].commitmentIndex = parseInt(
-      newLeavesEvents[0].returnValues.minLeafIndex,
-      10,
-    );
-    outputCommitments[1].commitmentIndex = outputCommitments[0].commitmentIndex + 1;
   } else {
-    txReceipt = await fTokenShieldInstance.transfer(
-      proof,
-      publicInputs,
-      root,
-      inputCommitments[0].nullifier,
-      inputCommitments[1].nullifier,
-      outputCommitments[0].commitment,
-      outputCommitments[1].commitment,
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'transfer');
-    const newLeavesLog = txReceipt.logs.filter(log => {
-      return log.event === 'NewLeaves';
+    txReceipt = await encodedRawTransaction.send({
+      from: account,
+      gas: 4000000,
+      gasPrice: config.GASPRICE,
     });
-    outputCommitments[0].commitmentIndex = parseInt(newLeavesLog[0].args.minLeafIndex, 10);
-    outputCommitments[1].commitmentIndex = outputCommitments[0].commitmentIndex + 1;
   }
+
+  const newLeavesEvents = await fTokenShieldInstance.getPastEvents('NewLeaves', {
+    filter: { transactionHash: txReceipt.transactionHash },
+  });
+
+  outputCommitments[0].commitmentIndex = parseInt(newLeavesEvents[0].returnValues.minLeafIndex, 10);
+  outputCommitments[1].commitmentIndex = outputCommitments[0].commitmentIndex + 1;
 
   if (fs.existsSync(`${outputDirectory}/${outputCommitments[0].commitment}-${proofName}`))
     fs.unlinkSync(`${outputDirectory}/${outputCommitments[0].commitment}-${proofName}`);
@@ -626,7 +590,7 @@ async function simpleFungibleBatchTransfer(
   logger.debug('\nIN BATCH TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  let fTokenShieldInstance = await getTruffleContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   const inputCommitment = _inputCommitment;
 
@@ -655,7 +619,10 @@ async function simpleFungibleBatchTransfer(
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   inputCommitment.siblingPath = await merkleTree.getSiblingPath(
-    fTokenShieldInstance,
+    {
+      contractName: 'FTokenShield',
+      instance: fTokenShieldInstance,
+    },
     inputCommitment.commitment,
     inputCommitment.commitmentIndex,
   );
@@ -752,49 +719,32 @@ async function simpleFungibleBatchTransfer(
   logger.debug(publicInputs);
 
   // send the token to Bob by transforming the commitment
+  const encodedRawTransaction = fTokenShieldInstance.methods.simpleBatchTransfer(
+    proof,
+    publicInputs,
+    root,
+    inputCommitment.nullifier,
+    outputCommitments.map(item => item.commitment),
+  );
+
   let txReceipt;
-  let outputCommitmentIndex;
   if (signingMethod) {
-    fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-    const encodedRawTransaction = fTokenShieldInstance.methods
-      .simpleBatchTransfer(
-        proof,
-        publicInputs,
-        root,
-        inputCommitment.nullifier,
-        outputCommitments.map(item => item.commitment),
-      )
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      fTokenShieldInstance.address,
-      true,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(encodedRawTransaction.encodeABI(), fTokenShieldInstance._address, true),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
-    const newLeavesEvents = await fTokenShieldInstance.getPastEvents('NewLeaves', {
-      filter: { transactionHash: txReceipt.transactionHash },
-    });
-    outputCommitmentIndex = parseInt(newLeavesEvents[0].returnValues.minLeafIndex, 10);
   } else {
-    txReceipt = await fTokenShieldInstance.simpleBatchTransfer(
-      proof,
-      publicInputs,
-      root,
-      inputCommitment.nullifier,
-      outputCommitments.map(item => item.commitment),
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'batch transfer');
-    const newLeavesLog = txReceipt.logs.filter(log => {
-      return log.event === 'NewLeaves';
+    txReceipt = await encodedRawTransaction.send({
+      from: account,
+      gas: 4000000,
+      gasPrice: config.GASPRICE,
     });
-    outputCommitmentIndex = parseInt(newLeavesLog[0].args.minLeafIndex, 10);
   }
 
+  const newLeavesEvents = await fTokenShieldInstance.getPastEvents('NewLeaves', {
+    filter: { transactionHash: txReceipt.transactionHash },
+  });
+
+  let outputCommitmentIndex = parseInt(newLeavesEvents[0].returnValues.minLeafIndex, 10);
   for (const outputCommitment of outputCommitments) {
     outputCommitment.commitmentIndex = outputCommitmentIndex;
     outputCommitmentIndex += 1;
@@ -856,7 +806,7 @@ async function consolidationTransfer(
   logger.debug('\nIN CONSOLIDATION TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  let fTokenShieldInstance = await getTruffleContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   const inputCommitments = _inputCommitments;
   const outputCommitment = _outputCommitment;
@@ -889,7 +839,10 @@ async function consolidationTransfer(
   const inputPaths = [];
   for (let i = 0; i < inputCommitments.length; i += 1) {
     inputCommitments[i].siblingPath = await merkleTree.getSiblingPath(
-      fTokenShieldInstance,
+      {
+        contractName: 'FTokenShield',
+        instance: fTokenShieldInstance,
+      },
       inputCommitments[i].commitment,
       inputCommitments[i].commitmentIndex,
     );
@@ -961,48 +914,33 @@ async function consolidationTransfer(
   logger.debug(publicInputs);
 
   // send the token to Bob by transforming the commitment
+  const encodedRawTransaction = fTokenShieldInstance.methods.consolidationTransfer(
+    proof,
+    publicInputs,
+    root,
+    inputCommitments.map(item => item.nullifier),
+    outputCommitment.commitment,
+  );
+
   let txReceipt;
   if (signingMethod) {
-    fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-    const encodedRawTransaction = fTokenShieldInstance.methods
-      .consolidationTransfer(
-        proof,
-        publicInputs,
-        root,
-        inputCommitments.map(item => item.nullifier),
-        outputCommitment.commitment,
-      )
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      fTokenShieldInstance.address,
-      true,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(encodedRawTransaction.encodeABI(), fTokenShieldInstance._address, true),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
-    const newLeafEvents = await fTokenShieldInstance.getPastEvents('NewLeaf', {
-      filter: { transactionHash: txReceipt.transactionHash },
-    });
-    outputCommitment.commitmentIndex = parseInt(newLeafEvents[0].returnValues.minLeafIndex, 10);
   } else {
-    txReceipt = await fTokenShieldInstance.consolidationTransfer(
-      proof,
-      publicInputs,
-      root,
-      inputCommitments.map(item => item.nullifier),
-      outputCommitment.commitment,
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'consolidation transfer');
-    const newLeafLog = txReceipt.logs.filter(log => {
-      return log.event === 'NewLeaf';
+    txReceipt = await encodedRawTransaction.send({
+      from: account,
+      gas: 4000000,
+      gasPrice: config.GASPRICE,
     });
-    outputCommitment.commitmentIndex = parseInt(newLeafLog[0].args.leafIndex, 10);
   }
 
+  const newLeafEvents = await fTokenShieldInstance.getPastEvents('NewLeaf', {
+    filter: { transactionHash: txReceipt.transactionHash },
+  });
+  logger.debug('newLeafEvents CONSOLIDATION :  ', newLeafEvents);
+  outputCommitment.commitmentIndex = parseInt(newLeafEvents[0].returnValues.leafIndex, 10);
+  logger.debug('outputCommitment:  ', outputCommitment, JSON.stringify(outputCommitment));
   logger.debug('CONSOLIDATION TRANSFER COMPLETE\n');
 
   return {
@@ -1055,14 +993,17 @@ async function burn(
   logger.debug('\nIN BURN...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  let fTokenShieldInstance = await getTruffleContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   // Calculate new arguments for the proof:
   const nullifier = utils.shaHash(salt, receiverZkpPrivateKey);
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
-    fTokenShieldInstance,
+    {
+      contractName: 'FTokenShield',
+      instance: fTokenShieldInstance,
+    },
     commitment,
     commitmentIndex,
   );
@@ -1176,35 +1117,27 @@ async function burn(
   logger.debug(publicInputs);
 
   // Burn the commitment and return tokens to the payTo account.
+  const encodedRawTransaction = fTokenShieldInstance.methods.burn(
+    erc20AddressPadded,
+    proof,
+    publicInputs,
+    root,
+    nullifier,
+    amount,
+    payTo,
+  );
+
   let txReceipt;
   if (signingMethod) {
-    fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-    const encodedRawTransaction = fTokenShieldInstance.methods
-      .burn(erc20AddressPadded, proof, publicInputs, root, nullifier, amount, payTo)
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      fTokenShieldInstance._address,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(encodedRawTransaction.encodeABI(), fTokenShieldInstance._address),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
   } else {
-    txReceipt = await fTokenShieldInstance.burn(
-      erc20AddressPadded,
-      proof,
-      publicInputs,
-      root,
-      nullifier,
-      amount,
-      payTo,
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'burn');
-    const newRoot = await fTokenShieldInstance.latestRoot();
-    logger.debug(`Merkle Root after burn: ${newRoot}`);
+    txReceipt = await encodedRawTransaction.send({
+      from: account,
+      gas: 4000000,
+      gasPrice: config.GASPRICE,
+    });
   }
 
   if (fs.existsSync(`${outputDirectory}/${commitment}-${proofName}`))

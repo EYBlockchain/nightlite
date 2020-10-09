@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 /**
  * This module contains the logic needed to interact with the FTokenShield contract,
  * specifically handling the mint, transfer, simpleBatchTransfer, and burn functions for fungible commitments.
@@ -12,7 +13,7 @@ const merkleTree = require('./merkleTree');
 const utils = require('./utils');
 const logger = require('./logger');
 const Element = require('./Element');
-const { getTruffleContractInstance } = require('./contractUtils');
+const { getWeb3ContractInstance } = require('./contractUtils');
 const {
   enc,
   AUTHORITY_PUBLIC_KEYS,
@@ -30,18 +31,14 @@ Only Admin can succesfully call this
 async function setAdminPublicKeys(blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
-  const fTokenShieldInstance = await getTruffleContractInstance(
-    'FTokenShield',
-    fTokenShieldAddress,
-  );
-  fTokenShieldInstance.setCompressedAdminPublicKeys(
-    AUTHORITY_PUBLIC_KEYS.map(pt => edwardsCompress(pt)),
-    {
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  fTokenShieldInstance
+    .setCompressedAdminPublicKeys(AUTHORITY_PUBLIC_KEYS.map(pt => edwardsCompress(pt)))
+    .send({
       from: account,
       gas: 6500000,
       gasPrice: config.GASPRICE,
-    },
-  );
+    });
 }
 
 /**
@@ -51,11 +48,8 @@ Only Admin can succesfully call this
 async function setRootPruningInterval(interval, blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
-  const fTokenShieldInstance = await getTruffleContractInstance(
-    'FTokenShield',
-    fTokenShieldAddress,
-  );
-  fTokenShieldInstance.setRootPruningInterval(interval, {
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  fTokenShieldInstance.setRootPruningInterval(interval).send({
     from: account,
     gas: 6500000,
     gasPrice: config.GASPRICE,
@@ -69,11 +63,8 @@ by the owner of TokenShield.sol, otherwise it will throw
 async function blacklist(malfeasantAddress, blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
-  const fTokenShieldInstance = await getTruffleContractInstance(
-    'FTokenShield',
-    fTokenShieldAddress,
-  );
-  fTokenShieldInstance.blacklistAddress(malfeasantAddress, {
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  fTokenShieldInstance.blacklistAddress(malfeasantAddress).send({
     from: account,
     gas: 6500000,
     gasPrice: config.GASPRICE,
@@ -86,11 +77,8 @@ Note that this can only be called by the owner of TokenShield.sol, otherwise it 
 async function unblacklist(blacklistedAddress, blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
-  const fTokenShieldInstance = await getTruffleContractInstance(
-    'FTokenShield',
-    fTokenShieldAddress,
-  );
-  fTokenShieldInstance.unBlacklistAddress(blacklistedAddress, {
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  fTokenShieldInstance.unBlacklistAddress(blacklistedAddress).send({
     from: account,
     gas: 6500000,
     gasPrice: config.GASPRICE,
@@ -166,10 +154,7 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
     proofName = 'proof.json',
   } = zokratesOptions;
 
-  const fTokenShieldInstance = await getTruffleContractInstance(
-    'FTokenShield',
-    fTokenShieldAddress,
-  );
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   logger.debug('\nIN MINT...');
 
@@ -242,8 +227,8 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   proof = proof.map(el => utils.hexToDec(el));
 
   // Approve fTokenShieldInstance to take tokens from minter's account.
-  const fTokenInstance = await getTruffleContractInstance('ERC20Interface', erc20Address);
-  await fTokenInstance.approve(fTokenShieldInstance.address, parseInt(amount, 16), {
+  const fTokenInstance = await getWeb3ContractInstance('ERC20Interface', erc20Address);
+  await fTokenInstance.methods.approve(fTokenShieldInstance._address, parseInt(amount, 16)).send({
     from: account,
     gas: 4000000,
     gasPrice: config.GASPRICE,
@@ -261,32 +246,27 @@ async function mint(amount, zkpPublicKey, salt, blockchainOptions, zokratesOptio
   logger.debug(publicInputs);
 
   // Mint the commitment
-  logger.debug('Approving ERC-20 spend from: ', fTokenShieldInstance.address);
-  const txReceipt = await fTokenShieldInstance.mintRC(
-    erc20AddressPadded,
-    proof,
-    publicInputs,
-    amount,
-    commitment,
-    zkpPublicKey,
-    {
+  logger.debug('Approving ERC-20 spend from: ', fTokenShieldInstance._address);
+  const txReceipt = await fTokenShieldInstance.methods
+    .mintRC(erc20AddressPadded, proof, publicInputs, amount, commitment, zkpPublicKey)
+    .send({
       from: account,
       gas: 6500000,
       gasPrice: config.GASPRICE,
-    },
-  );
+    });
   utils.gasUsedStats(txReceipt, 'mint');
 
-  const newLeafLog = txReceipt.logs.filter(log => {
-    return log.event === 'NewLeaf';
+  const newLeafLog = fTokenShieldInstance.getPastEvents('NewLeaf', {
+    filter: { transactionHash: txReceipt.transactionHash },
   });
-  const commitmentIndex = newLeafLog[0].args.leafIndex;
+
+  const commitmentIndex = newLeafLog[0].returnValues.leafIndex;
 
   logger.debug('ERC-20 spend approved!', parseInt(amount, 16));
   logger.debug(
     'Balance of account',
     account,
-    (await fTokenInstance.balanceOf.call(account)).toNumber(),
+    (await fTokenInstance.methods.balanceOf(account).call()).toNumber(),
   );
   logger.debug('Mint output: [zA, zAIndex]:', commitment, commitmentIndex.toString());
   logger.debug('MINT COMPLETE\n');
@@ -333,10 +313,7 @@ async function transfer(
   logger.debug('\nIN TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  const fTokenShieldInstance = await getTruffleContractInstance(
-    'FTokenShield',
-    fTokenShieldAddress,
-  );
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   const inputCommitments = _inputCommitments;
   const outputCommitments = _outputCommitments;
@@ -393,12 +370,18 @@ async function transfer(
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   inputCommitments[0].siblingPath = await merkleTree.getSiblingPath(
-    fTokenShieldInstance,
+    {
+      contractName: 'FTokenShield',
+      instance: fTokenShieldInstance,
+    },
     inputCommitments[0].commitment,
     inputCommitments[0].commitmentIndex,
   );
   inputCommitments[1].siblingPath = await merkleTree.getSiblingPath(
-    fTokenShieldInstance,
+    {
+      contractName: 'FTokenShield',
+      instance: fTokenShieldInstance,
+    },
     inputCommitments[1].commitment,
     inputCommitments[1].commitmentIndex,
   );
@@ -626,24 +609,24 @@ async function transfer(
   logger.debug(proof);
 
   // Transfers commitment
-  const txReceipt = await fTokenShieldInstance.transferRC(
-    proof,
-    utils.formatInputsForZkSnark([new Element(publicInputHash, 'field', 248, 1)]),
-    compressedPublicInputsArray,
-    {
+  const txReceipt = await fTokenShieldInstance.methods
+    .transferRC(
+      proof,
+      utils.formatInputsForZkSnark([new Element(publicInputHash, 'field', 248, 1)]),
+      compressedPublicInputsArray,
+    )
+    .send({
       from: account,
       gas: 6500000,
       gasPrice: config.GASPRICE,
-    },
-  );
+    });
   utils.gasUsedStats(txReceipt, 'transfer');
 
-  const newLeavesLog = txReceipt.logs.filter(log => {
-    return log.event === 'NewLeaves';
+  const newLeavesEvents = await fTokenShieldInstance.getPastEvents('NewLeaves', {
+    filter: { transactionHash: txReceipt.transactionHash },
   });
-  // eslint-disable-next-line no-param-reassign
-  outputCommitments[0].commitmentIndex = parseInt(newLeavesLog[0].args.minLeafIndex, 10);
-  // eslint-disable-next-line no-param-reassign
+
+  outputCommitments[0].commitmentIndex = parseInt(newLeavesEvents[0].returnValues.minLeafIndex, 10);
   outputCommitments[1].commitmentIndex = outputCommitments[0].commitmentIndex + 1;
 
   logger.debug('TRANSFER COMPLETE\n');
@@ -722,10 +705,7 @@ async function burn(
   logger.debug('\nIN BURN...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  const fTokenShieldInstance = await getTruffleContractInstance(
-    'FTokenShield',
-    fTokenShieldAddress,
-  );
+  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   // Calculate new arguments for the proof:
   const nullifier = utils.concatenateThenHash(salt, receiverZkpPrivateKey);
@@ -740,7 +720,10 @@ async function burn(
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
-    fTokenShieldInstance,
+    {
+      contractName: 'FTokenShield',
+      instance: fTokenShieldInstance,
+    },
     commitment,
     commitmentIndex,
   );
@@ -857,19 +840,16 @@ async function burn(
   logger.debug(publicInputs);
 
   // Burn the commitment and return tokens to the payTo account.
-  const txReceipt = await fTokenShieldInstance.burnRC(
-    proof,
-    publicInputs,
-    compressedPublicInputsArray,
-    {
+  const txReceipt = await fTokenShieldInstance.methods
+    .burnRC(proof, publicInputs, compressedPublicInputsArray)
+    .send({
       from: account,
       gas: 6500000,
       gasPrice: config.GASPRICE,
-    },
-  );
+    });
   utils.gasUsedStats(txReceipt, 'burn');
 
-  const newRoot = await fTokenShieldInstance.latestRoot();
+  const newRoot = await fTokenShieldInstance.methods.latestRoot();
   logger.debug(`Merkle Root after burn: ${newRoot}`);
   logger.debug('BURN COMPLETE\n');
   return { z_C: commitment, z_C_index: commitmentIndex, txReceipt };

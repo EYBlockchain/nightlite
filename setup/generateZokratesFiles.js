@@ -19,10 +19,7 @@ const mkdir = util.promisify(fs.mkdir);
  * @param {string} solFilePath
  */
 function keyExtractor(solFilePath) {
-  const solData = fs
-    .readFileSync(solFilePath)
-    .toString('UTF8')
-    .split(os.EOL);
+  const solData = fs.readFileSync(solFilePath).toString('UTF8').split(os.EOL);
   const jsonTxt = [];
   jsonTxt.push('{');
   solData.forEach(el => {

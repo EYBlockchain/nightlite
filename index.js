@@ -10,6 +10,8 @@ const erc721rc = require('./erc721rc');
 const utils = require('./utils');
 const elgamal = require('./elgamal');
 
+provider.connect();
+
 // Do we want regulatory compliance?  It's not avaiable with MiMC yet
 let erc20 = erc20n;
 let erc721 = erc721n;

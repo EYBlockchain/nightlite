@@ -13,11 +13,7 @@ const merkleTree = require('./merkleTree');
 const utils = require('./utils');
 const logger = require('./logger');
 const Element = require('./Element');
-const {
-  getTruffleContractInstance,
-  getWeb3ContractInstance,
-  sendSignedTransaction,
-} = require('./contractUtils');
+const { getWeb3ContractInstance, sendSignedTransaction } = require('./contractUtils');
 
 /**
  * Mint a commitment
@@ -62,7 +58,7 @@ async function mint(
 
   logger.debug('\nIN MINT...');
 
-  let nfTokenShieldInstance = await getTruffleContractInstance(
+  const nfTokenShieldInstance = await getWeb3ContractInstance(
     'NFTokenShield',
     nfTokenShieldAddress,
   );
@@ -127,16 +123,15 @@ async function mint(
 
   logger.debug('Getting ERC721 contract instance');
   // Getting the ERC721 contract instance.
+  const nfTokenInstance = await getWeb3ContractInstance('ERC721Interface', erc721Address);
+  const nfTokenInstanceTx = nfTokenInstance.methods.approve(nfTokenShieldAddress, tokenId);
+
   if (signingMethod) {
-    const nfTokenInstance = await getWeb3ContractInstance('ERC721Interface', erc721Address);
-    const encodedRawTransaction = nfTokenInstance.methods
-      .approve(nfTokenShieldAddress, tokenId)
-      .encodeABI();
-    const signedTransaction = await signingMethod(encodedRawTransaction, nfTokenInstance._address);
-    await sendSignedTransaction(signedTransaction);
+    await sendSignedTransaction(
+      await signingMethod(nfTokenInstanceTx.encodeABI(), nfTokenInstance._address),
+    );
   } else {
-    const nfTokenInstance = await getTruffleContractInstance('ERC721Interface', erc721Address);
-    await nfTokenInstance.approve(nfTokenShieldAddress, tokenId, {
+    await nfTokenInstanceTx.send({
       from: account,
       gas: 4000000,
     });
@@ -154,43 +149,32 @@ async function mint(
   logger.debug(publicInputs);
 
   // Mint the commitment
+  const encodedRawTransaction = nfTokenShieldInstance.methods.mint(
+    erc721AddressPadded,
+    proof,
+    publicInputs,
+    tokenId,
+    commitment,
+  );
+
   let txReceipt;
-  let commitmentIndex;
   if (signingMethod) {
-    nfTokenShieldInstance = await getWeb3ContractInstance('NFTokenShield', nfTokenShieldAddress);
-    const encodedRawTransaction = nfTokenShieldInstance.methods
-      .mint(erc721AddressPadded, proof, publicInputs, tokenId, commitment)
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      nfTokenShieldInstance._address,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(encodedRawTransaction.encodeABI(), nfTokenShieldInstance._address),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
-    const newLeafEvents = await nfTokenShieldInstance.getPastEvents('NewLeaf', {
-      filter: { transactionHash: txReceipt.transactionHash },
-    });
-    logger.debug('root in solidity:', newLeafEvents[0].returnValues.root);
-    commitmentIndex = newLeafEvents[0].returnValues.leafIndex;
   } else {
-    txReceipt = await nfTokenShieldInstance.mint(
-      erc721AddressPadded,
-      proof,
-      publicInputs,
-      tokenId,
-      commitment,
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'mint');
-    const newLeafLog = txReceipt.logs.filter(log => {
-      return log.event === 'NewLeaf';
+    txReceipt = await encodedRawTransaction.send({
+      from: account,
+      gas: 6500000,
+      gasPrice: config.GASPRICE,
     });
-    logger.debug('root in solidity:', newLeafLog[0].args.root);
-    commitmentIndex = newLeafLog[0].args.leafIndex;
   }
+
+  const newLeafEvents = await nfTokenShieldInstance.getPastEvents('NewLeaf', {
+    filter: { transactionHash: txReceipt.transactionHash },
+  });
+  logger.debug('root in solidity:', newLeafEvents[0].returnValues.root);
+  const commitmentIndex = newLeafEvents[0].returnValues.leafIndex;
 
   logger.debug('Mint output: [z_A, z_A_index]:', commitment, commitmentIndex.toString());
   logger.debug('MINT COMPLETE\n');
@@ -243,7 +227,7 @@ async function transfer(
 
   logger.debug('\nIN TRANSFER...');
 
-  let nfTokenShieldInstance = await getTruffleContractInstance(
+  const nfTokenShieldInstance = await getWeb3ContractInstance(
     'NFTokenShield',
     nfTokenShieldAddress,
   );
@@ -259,7 +243,10 @@ async function transfer(
 
   // Get the sibling-path from the token commitment (leaf) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
-    nfTokenShieldInstance,
+    {
+      contractName: 'NFTokenShield',
+      instance: nfTokenShieldInstance,
+    },
     commitment,
     commitmentIndex,
   );
@@ -382,42 +369,31 @@ async function transfer(
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
 
+  const encodedRawTransaction = nfTokenShieldInstance.methods.transfer(
+    proof,
+    publicInputs,
+    root,
+    nullifier,
+    outputCommitment,
+  );
+
   let txReceipt;
-  let outputCommitmentIndex;
   if (signingMethod) {
-    nfTokenShieldInstance = await getWeb3ContractInstance('NFTokenShield', nfTokenShieldAddress);
-    const encodedRawTransaction = nfTokenShieldInstance.methods
-      .transfer(proof, publicInputs, root, nullifier, outputCommitment)
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      nfTokenShieldInstance._address,
-      true,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(encodedRawTransaction.encodeABI(), nfTokenShieldInstance._address, true),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
-    const newLeafEvents = await nfTokenShieldInstance.getPastEvents('NewLeaf', {
-      filter: { transactionHash: txReceipt.transactionHash },
-    });
-    outputCommitmentIndex = newLeafEvents[0].returnValues.leafIndex;
   } else {
-    txReceipt = await nfTokenShieldInstance.transfer(
-      proof,
-      publicInputs,
-      root,
-      nullifier,
-      outputCommitment,
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'transfer');
-    const newLeafLog = txReceipt.logs.filter(log => {
-      return log.event === 'NewLeaf';
+    txReceipt = await encodedRawTransaction.send({
+      from: account,
+      gas: 6500000,
+      gasPrice: config.GASPRICE,
     });
-    outputCommitmentIndex = newLeafLog[0].args.leafIndex;
   }
+
+  const newLeafEvents = await nfTokenShieldInstance.getPastEvents('NewLeaf', {
+    filter: { transactionHash: txReceipt.transactionHash },
+  });
+  const outputCommitmentIndex = newLeafEvents[0].returnValues.leafIndex;
 
   if (fs.existsSync(`${outputDirectory}/${commitment}-${proofName}`))
     fs.unlinkSync(`${outputDirectory}/${commitment}-${proofName}`);
@@ -473,7 +449,7 @@ async function burn(
     proofName = 'proof.json',
   } = zokratesOptions;
 
-  let nfTokenShieldInstance = await getTruffleContractInstance(
+  const nfTokenShieldInstance = await getWeb3ContractInstance(
     'NFTokenShield',
     nfTokenShieldAddress,
   );
@@ -486,7 +462,10 @@ async function burn(
 
   // Get the sibling-path from the token commitment (leaf) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
-    nfTokenShieldInstance,
+    {
+      contractName: 'NFTokenShield',
+      instance: nfTokenShieldInstance,
+    },
     commitment,
     commitmentIndex,
   );
@@ -596,35 +575,31 @@ async function burn(
   logger.debug('publicInputs:');
   logger.debug(publicInputs);
 
+  const encodedRawTransaction = nfTokenShieldInstance.methods.burn(
+    erc721AddressPadded,
+    proof,
+    publicInputs,
+    root,
+    nullifier,
+    tokenId,
+    payTo,
+  );
+
   // Burns commitment and returns token to payTo
   let txReceipt;
   if (signingMethod) {
-    nfTokenShieldInstance = await getWeb3ContractInstance('NFTokenShield', nfTokenShieldAddress);
-    const encodedRawTransaction = nfTokenShieldInstance.methods
-      .burn(erc721AddressPadded, proof, publicInputs, root, nullifier, tokenId, payTo)
-      .encodeABI();
-    const signedTransaction = await signingMethod(
-      encodedRawTransaction,
-      nfTokenShieldInstance._address,
+    txReceipt = await sendSignedTransaction(
+      await signingMethod(encodedRawTransaction.encodeABI(), nfTokenShieldInstance._address),
     );
-    txReceipt = await sendSignedTransaction(signedTransaction);
   } else {
-    txReceipt = await nfTokenShieldInstance.burn(
-      erc721AddressPadded,
-      proof,
-      publicInputs,
-      root,
-      nullifier,
-      tokenId,
-      payTo,
-      {
-        from: account,
-        gas: 6500000,
-        gasPrice: config.GASPRICE,
-      },
-    );
-    utils.gasUsedStats(txReceipt, 'burn');
+    txReceipt = await encodedRawTransaction.send({
+      from: account,
+      gas: 6500000,
+      gasPrice: config.GASPRICE,
+    });
   }
+
+  utils.gasUsedStats(txReceipt, 'burn');
 
   if (fs.existsSync(`${outputDirectory}/${commitment}-${proofName}`))
     fs.unlinkSync(`${outputDirectory}/${commitment}-${proofName}`);

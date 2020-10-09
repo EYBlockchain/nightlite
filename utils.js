@@ -204,9 +204,7 @@ function hexToField(hexStr, fieldSize) {
   const cleanHexStr = strip0x(hexStr);
   const decStr = hexToDec(cleanHexStr);
   const q = BI(fieldSize);
-  return BI(decStr)
-    .mod(q)
-    .toString();
+  return BI(decStr).mod(q).toString();
 }
 
 /**
@@ -427,10 +425,7 @@ function powerMod(base, exponent, m) {
 
 function keccak256Hash(item) {
   const preimage = strip0x(item);
-  const h = `0x${createKeccakHash('keccak256')
-    .update(preimage, 'hex')
-    .digest('hex')}`;
-  return h;
+  return `0x${createKeccakHash('keccak256').update(preimage, 'hex').digest('hex')}`;
 }
 
 /**
@@ -517,11 +512,7 @@ function shaHash(...items) {
     .map(item => Buffer.from(strip0x(item), 'hex'))
     .reduce((acc, item) => concatenate(acc, item));
 
-  const h = `0x${crypto
-    .createHash('sha256')
-    .update(concatvalue, 'hex')
-    .digest('hex')}`;
-  return h;
+  return `0x${crypto.createHash('sha256').update(concatvalue, 'hex').digest('hex')}`;
 }
 
 function concatenateThenHash(...items) {
@@ -626,13 +617,13 @@ function formatInputsForZkSnark(elements) {
 
 function gasUsedStats(txReceipt, functionName) {
   logger.debug(`\nGas used in ${functionName}:`);
-  const { gasUsed } = txReceipt.receipt;
-  const gasUsedLog = txReceipt.logs.filter(log => {
-    return log.event === 'GasUsed';
-  });
-  const gasUsedByShieldContract = Number(gasUsedLog[0].args.byShieldContract.toString());
-  const gasUsedByVerifierContract = Number(gasUsedLog[0].args.byVerifierContract.toString());
+
+  const { gasUsed } = txReceipt;
+  const gasUsedLog = txReceipt.events.GasUsed;
+  const gasUsedByShieldContract = Number(gasUsedLog.returnValues.byShieldContract.toString());
+  const gasUsedByVerifierContract = Number(gasUsedLog.returnValues.byVerifierContract.toString());
   const refund = gasUsedByVerifierContract + gasUsedByShieldContract - gasUsed;
+
   logger.debug('Total:', gasUsed);
   logger.debug('By shield contract:', gasUsedByShieldContract);
   logger.debug('By verifier contract (pre refund):', gasUsedByVerifierContract);
