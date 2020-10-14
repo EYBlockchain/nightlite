@@ -7,48 +7,49 @@
     "start": "node build/index.js",
     "dev": "nodemon build/index.js",
     "fix": "npm run format && npm run lint -- --fix && solium -d contracts",
-    "format": "cod-scripts format",
-    "lint": "cod-scripts lint",
+    "format": "prettier --write \"**/*.{json,css,scss,md}\"",
+    "lint": "eslint .",
     "lint:md": "markdownlint -i node_modules -i build .",
-    "validate": "cod-scripts validate",
     "lint:sol": "solium -d contracts",
     "test": "jest --verbose --runInBand ./__tests__/*.test.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EYBlockchain/nightlite.git"
+  },
   "devDependencies": {
-    "cod-scripts": "^3.3.0",
+    "@commitlint/cli": "^11.0.0",
+    "@commitlint/config-conventional": "^11.0.0",
+    "eslint": "^6.8.0",
+    "eslint-config-codfish": "3.0.0",
     "ethlint": "^1.2.4",
     "fast-check": "^1.26.0",
+    "husky": "^4.2.5",
+    "jest": "^24.8.0",
     "markdownlint-cli": "^0.18.0",
     "nodemon": "^1.19.2",
-    "prettier-plugin-solidity": "^1.0.0-alpha.31",
-    "jest": "^24.8.0"
+    "prettier": "^2.0.5",
+    "prettier-plugin-solidity": "^1.0.0-alpha.31"
   },
   "dependencies": {
     "@eyblockchain/zokrates.js": "^1.2.0",
     "big-integer": "^1.6.48",
-    "eslint": "^6.8.0",
     "hex-to-binary": "^1.0.1",
-    "jsonfile": "^5.0.0",
     "keccak": "^2.1.0",
     "request": "^2.88.0",
     "safe-buffer": "^5.2.0",
-    "truffle-contract": "^4.0.15",
-    "web3": "1.0.0-beta.36",
-    "winston": "^3.2.1"
+    "web3": "1.3.0",
+    "winston": "^3.2.1",
+    "yargs": "16.0.3"
   },
   "publishConfig": {
     "registry": "http://registry.npmjs.org/",
     "access": "public"
   },
-  "eslintConfig": {
-    "extends": [
-      "./node_modules/cod-scripts/eslint.js"
-    ]
-  },
   "husky": {
     "hooks": {
-      "pre-commit": "cod-scripts pre-commit",
-      "commit-msg": "cod-scripts commitlint -E HUSKY_GIT_PARAMS"
+      "pre-commit": "npm run lint",
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
     }
   }
 }

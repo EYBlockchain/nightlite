@@ -195,20 +195,20 @@ This function computes the path through a Mekle tree to get from a token
 to the root by successive hashing.  This is needed for part of the private input
 to proofs that need demonstrate that a token is in a Merkle tree.
 It works for any size of Merkle tree, it just needs to know the tree depth, which it gets from config.js
-@param {contract} shieldContract - an instance of the shield contract that holds the commitments
+@param {contract} shieldContractInfo - an Object
 @param {string} commitment - the commitment value
 @param {integer} commitmentIndex - the leafIndex within the shield contract's merkle tree of the commitment we're getting the sibling path for
 @returns {object} containing: an array of strings - where each element of the array is a node of the sister-path of
 the path from myToken to the Merkle Root and whether the sister node is to the left or the right (this is needed because the order of hashing matters)
 */
-async function getSiblingPath(shieldContract, _commitment, commitmentIndex) {
+async function getSiblingPath(shieldContractInfo, _commitment, commitmentIndex) {
   // check the commitment's format:
   // logger.debug('commitment', commitment);
   // if (commitment.length !== config.LEAF_HASHLENGTH * 2) {
   //   throw new Error(`commitment has incorrect length: ${commitment}`);
   // }
 
-  const { contractName } = shieldContract.constructor._json; // eslint-disable-line no-underscore-dangle
+  const { contractName, instance } = shieldContractInfo;
 
   // check the database's mongodb aligns with the merkle-tree's mongodb: i.e. check leaf.commitmentIndex === commitment:
   logger.debug('\nChecking leaf...');
@@ -232,8 +232,10 @@ async function getSiblingPath(shieldContract, _commitment, commitmentIndex) {
   logger.debug('\nChecking root...');
   const rootInDb = siblingPath[0];
   logger.debug('rootInDb:', rootInDb);
-  const rootOnChain = await shieldContract.roots.call(rootInDb);
+
+  const rootOnChain = await instance.methods.roots(rootInDb).call();
   logger.debug('rootOnChain:', rootOnChain);
+
   if (rootOnChain !== rootInDb)
     throw new Error(
       'FATAL: The root calculated within the merkle-tree microservice does not match any historic on-chain roots.',

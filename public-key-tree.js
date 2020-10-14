@@ -11,11 +11,11 @@ returned as element 0 of the sibling path.
 async function getPublicKeyTreeData(contractInstance, _key) {
   const key = `0x${(BigInt(_key) % ZOKRATES_PRIME).toString(16).padStart(64, '0')}`;
   console.log('KEY LENGTH WAS', key.length - 2, key);
-  const commitmentIndex = await contractInstance.L.call(key);
+  const commitmentIndex = await contractInstance.methods.L(key).call();
   const siblingPath = []; // sibling path
   let s = 0; // index of sibling path node in the merkle tree
   let t = 0; // temp index for next highest path node in the merkle tree
-  let p = commitmentIndex.toNumber();
+  let p = Number(commitmentIndex);
 
   const leafIndex = commitmentIndex - FIRST_LEAF_INDEX;
   if (leafIndex < 0) {
@@ -31,10 +31,10 @@ async function getPublicKeyTreeData(contractInstance, _key) {
       s = p + 1;
       t = Math.floor(p / 2);
     }
-    siblingPath[r] = contractInstance.M.call(s);
+    siblingPath[r] = contractInstance.methods.M(s).call();
     p = t;
   }
-  siblingPath[0] = contractInstance.M.call(0); // store the root value here
+  siblingPath[0] = contractInstance.methods.M(0).call(); // store the root value here
 
   return {
     leafIndex,

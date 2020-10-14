@@ -167,18 +167,12 @@ function edwardsCompress(p) {
   const yBits = py.toString(2).padStart(256, '0');
   const sign = xBits[255] === '1' ? '1' : '0';
   const yBitsC = sign.concat(yBits.slice(1)); // add in the sign bit
-  const y = utils.ensure0x(
-    BigInt('0b'.concat(yBitsC))
-      .toString(16)
-      .padStart(64, '0'),
-  ); // put yBits into hex
+  const y = utils.ensure0x(BigInt('0b'.concat(yBitsC)).toString(16).padStart(64, '0')); // put yBits into hex
   return y;
 }
 
 function edwardsDecompress(y) {
-  const py = BigInt(y)
-    .toString(2)
-    .padStart(256, '0');
+  const py = BigInt(y).toString(2).padStart(256, '0');
   const sign = py[0];
   const yfield = BigInt(`0b${py.slice(1)}`); // remove the sign encoding
   if (yfield > ZOKRATES_PRIME || yfield < 0)
@@ -192,9 +186,7 @@ function edwardsDecompress(y) {
   );
   if (x2 === 0n && sign === '0') return BABYJUBJUB.INFINITY;
   let xfield = squareRootModPrime(x2);
-  const px = BigInt(xfield)
-    .toString(2)
-    .padStart(256, '0');
+  const px = BigInt(xfield).toString(2).padStart(256, '0');
   if (px[255] !== sign) xfield = ZOKRATES_PRIME - xfield;
   const p = [xfield, yfield];
   if (!isOnCurve(p)) throw new Error('The computed point was not on the Babyjubjub curve');
