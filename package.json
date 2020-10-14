@@ -43,7 +43,7 @@
     "yargs": "16.0.3"
   },
   "publishConfig": {
-    "registry": "http://registry.npmjs.org/",
+    "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
   "husky": {
