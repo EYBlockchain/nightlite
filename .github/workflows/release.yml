@@ -20,8 +20,16 @@ jobs:
           npm install --no-save
           npm run lint
 
-      - name: Release
-        uses: codfish/semantic-release-action@v1.2.1
+      - uses: codfish/semantic-release-action@master
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - run: echo ${{ steps.semantic.outputs.release-version }}
+
+      - name: publish npm package to github
+        if: steps.semantic.outputs.new-release-published == 'true'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
