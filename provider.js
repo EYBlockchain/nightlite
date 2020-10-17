@@ -10,8 +10,6 @@ module.exports = {
    * Connects to web3 and then sets proper handlers for events
    */
   connect() {
-    if (this.web3) return this.web3.currentProvider;
-
     logger.info('Blockchain Connecting ...');
     const provider = new Web3.providers.WebsocketProvider(
       `${process.env.BLOCKCHAIN_HOST}:${process.env.BLOCKCHAIN_PORT}`,
@@ -22,8 +20,6 @@ module.exports = {
     provider.on('end', logger.error);
 
     this.web3 = new Web3(provider);
-
-    return provider;
   },
 
   /**

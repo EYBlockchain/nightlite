@@ -29,7 +29,6 @@ function overrideDefaultConfig(passedConfig) {
 module.exports = {
   generateZokratesFiles,
   merkleTree,
-  provider,
   vks,
   erc20,
   erc721,

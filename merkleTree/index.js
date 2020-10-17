@@ -336,7 +336,7 @@ async function checkCorrectness(
   commitment,
   commitmentIndex,
   blockNumber,
-  shieldContract,
+  contractName,
 ) {
   console.log('Checking h(contractAddress|value|publicKey|salt) = z...');
   const commitmentCheck = utils.concatenateThenHash(
@@ -355,7 +355,6 @@ async function checkCorrectness(
   );
   console.log('commitment:', commitment);
   console.log('commitmentIndex:', commitmentIndex);
-  const { contractName } = shieldContract.constructor._json; // eslint-disable-line no-underscore-dangle
 
   // query the merkle-tree microservice until it's filtered the blockNumber we wish to query:
   await waitForBlockNumber(contractName, blockNumber);
