@@ -1,24 +1,21 @@
-name: Release
+name: Node.js Package
 
 on:
   push:
     branches:
       - master
-
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@master
-
+      # Setup .npmrc file to publish to GitHub Packages
       - uses: actions/setup-node@v1
         with:
-          version: 11.15
+          node-version: '12.x'
+          registry-url: 'https://npm.pkg.github.com'
 
-      - run: |
-          npm install --no-save
-          npm run lint
+      - run: npm install
 
       - uses: codfish/semantic-release-action@master
         id: semantic
