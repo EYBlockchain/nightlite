@@ -33,7 +33,6 @@
   },
   "dependencies": {
     "@eyblockchain/zokrates.js": "^1.2.0",
-    "@semantic-release/git": "^9.0.0",
     "big-integer": "^1.6.48",
     "hex-to-binary": "^1.0.1",
     "keccak": "^2.1.0",
