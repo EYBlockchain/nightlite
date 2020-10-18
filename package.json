@@ -44,7 +44,7 @@
     "yargs": "16.0.3"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://npm.pkg.github.com"
   },
   "husky": {
     "hooks": {
