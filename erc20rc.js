@@ -32,7 +32,7 @@ async function setAdminPublicKeys(blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
   const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-  fTokenShieldInstance
+  fTokenShieldInstance.methods
     .setCompressedAdminPublicKeys(AUTHORITY_PUBLIC_KEYS.map(pt => edwardsCompress(pt)))
     .send({
       from: account,
@@ -49,7 +49,7 @@ async function setRootPruningInterval(interval, blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
   const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-  fTokenShieldInstance.setRootPruningInterval(interval).send({
+  fTokenShieldInstance.methods.setRootPruningInterval(interval).send({
     from: account,
     gas: 6500000,
     gasPrice: config.GASPRICE,
@@ -64,7 +64,7 @@ async function blacklist(malfeasantAddress, blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
   const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-  fTokenShieldInstance.blacklistAddress(malfeasantAddress).send({
+  fTokenShieldInstance.methods.blacklistAddress(malfeasantAddress).send({
     from: account,
     gas: 6500000,
     gasPrice: config.GASPRICE,
@@ -78,7 +78,7 @@ async function unblacklist(blacklistedAddress, blockchainOptions) {
   const { fTokenShieldAddress } = blockchainOptions;
   const account = utils.ensure0x(blockchainOptions.account);
   const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
-  fTokenShieldInstance.unBlacklistAddress(blacklistedAddress).send({
+  fTokenShieldInstance.methods.unBlacklistAddress(blacklistedAddress).send({
     from: account,
     gas: 6500000,
     gasPrice: config.GASPRICE,
