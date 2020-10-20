@@ -85,7 +85,7 @@ async function unblacklist(blacklistedAddress, blockchainOptions) {
   });
 }
 /**
-Decrypts the El-Gamal encrypted data from zkp transaction.  The private keys
+Decrypts the El-Gamal encrypted data from zkp transaction event log. The private keys
 must be set within the el-gamal module first and the txReceipt must have resolved
 to a full object, not just a transaction hash i.e. it must have been mined.
 When a curve point has been decrypted (and the total number of points depends on the type)
@@ -98,17 +98,14 @@ curve point and it must implement the iterable interface so that we can call it 
 way to get the next guess (a simple guesser could be just an array of possible solutions, therefore,
 because the array object implements the iterable interface; a generator function is another good
 choice where we have a known sequence of guesses to make such as all the numbers between 0 and 1 million)
-@param {object} txReceipt - the transaction receipt from the transaction of interest
+@param {object} eventLog - event log from a transaction receipt
 @param {string} type - the type of transaction we are trying to decrypt ('Burn', 'Transfer')
 @param {array} guessers - an array of generators that generate guesses for possible values of each messag
 */
-function decryptTransaction(txReceipt, { type, guessers }) {
+function decryptEventLog(eventLog, { type, guessers }) {
   if (!config.ALLOWED_DECRYPTION_TYPES[type])
     throw new Error('Unknown transaction type for decryption');
-  const publicInputLog = txReceipt.logs.filter(log => {
-    return log.event === type;
-  });
-  const { publicInputs } = publicInputLog[0].args;
+  const { publicInputs } = eventLog.returnValues;
   const c = [];
   for (
     let i = config.ALLOWED_DECRYPTION_TYPES[type].PUBLIC_INPUTS_START_POSITION;
@@ -862,7 +859,7 @@ module.exports = {
   burn,
   blacklist,
   unblacklist,
-  decryptTransaction,
+  decryptEventLog,
   consolidationTransfer,
   setAdminPublicKeys,
   setRootPruningInterval,
