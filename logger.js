@@ -11,7 +11,7 @@ function formatWithInspect(val) {
 
 const logLevel = process.env.NIGHTLITE_LOG_LEVEL ? process.env.NIGHTLITE_LOG_LEVEL : 'info';
 
-module.exports = createLogger({
+const logger = createLogger({
   level: logLevel,
   format: format.combine(
     format.errors({ stack: true }),
@@ -35,3 +35,9 @@ module.exports = createLogger({
   ),
   transports: [new transports.Console()],
 });
+
+logger.info.bind(logger);
+logger.debug.bind(logger);
+logger.error.bind(logger);
+
+module.exports = logger;
