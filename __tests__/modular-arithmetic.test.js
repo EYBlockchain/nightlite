@@ -1,5 +1,6 @@
 // tests for various aspects of modular arithmetic and related functions
 const fc = require('fast-check');
+const { randomHex } = require('zkp-utils');
 const {
   add,
   enc,
@@ -12,7 +13,6 @@ const {
   edwardsDecompress,
 } = require('../elgamal');
 const { BABYJUBJUB, ZOKRATES_PRIME } = require('../config');
-const { randomHex } = require('../utils');
 const { squareRootModPrime } = require('../number-theory');
 
 const SIZE = 100;
@@ -26,12 +26,6 @@ describe('Random Hex tests', () => {
     b = b.map(elt => BigInt(elt, 16));
     const c = (b[0] < ZOKRATES_PRIME).toString();
     expect(c).toBe('true');
-  });
-
-  test(`Random hex does not accept maximum smaller than the desired byte size`, async () => {
-    expect(() => {
-      randomHex(32, 100000);
-    }).toThrow();
   });
 });
 
@@ -93,6 +87,7 @@ describe('Number theory tests', () => {
   test(`Correctly give a modular square root`, async () => {
     const n = BigInt('367754678987654567222357890866781');
     const a = squareRootModPrime(n, ZOKRATES_PRIME);
+    console.log(n, ZOKRATES_PRIME, a);
     const b = (ZOKRATES_PRIME - a) % ZOKRATES_PRIME;
     expect([a, BigInt(b)]).toEqual(
       expect.arrayContaining([

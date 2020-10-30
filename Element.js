@@ -1,5 +1,5 @@
+const { ensure0x } = require('zkp-utils');
 const config = require('./config');
-const utils = require('./utils');
 
 /**
 This class defines a 'proof element'.  That's basically an object that will be fed to token-format-inputs.js so that it can generate the witness string for a proof.
@@ -18,7 +18,7 @@ class Element {
     if (hex === '') throw new Error('input was empty');
     if (encoding === undefined) throw new Error('An encoding must be specified');
     // eslint-disable-next-line valid-typeof
-    this.hex = typeof hex === 'bigint' ? hex : utils.ensure0x(hex.toString(16));
+    this.hex = typeof hex === 'bigint' ? hex : ensure0x(hex.toString(16));
     this.encoding = encoding;
     if (encoding === 'field') {
       this.packingSize = packingSize || config.ZOKRATES_PACKING_SIZE;

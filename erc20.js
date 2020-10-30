@@ -8,6 +8,8 @@
  */
 
 const zokrates = require('@eyblockchain/zokrates.js');
+const { ensure0x, shaHash, hexToDec, leftPadHex } = require('zkp-utils');
+const { GN } = require('general-number');
 const fs = require('fs');
 const config = require('./config');
 const merkleTree = require('./merkleTree');
@@ -39,9 +41,8 @@ async function mint(
   zokratesOptions,
   signingMethod = undefined,
 ) {
-  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
-  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
-  const account = utils.ensure0x(blockchainOptions.account);
+  const erc20Address = new GN(blockchainOptions.erc20Address);
+  const account = ensure0x(blockchainOptions.account);
 
   const {
     codePath,
@@ -53,43 +54,33 @@ async function mint(
     proofName = 'proof.json',
   } = zokratesOptions;
 
-  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance(
+    'FTokenShield',
+    blockchainOptions.fTokenShieldAddress,
+  );
 
   logger.debug('\nIN MINT...');
 
   // Calculate new arguments for the proof:
-  const commitment = utils.shaHash(erc20AddressPadded, amount, zkpPublicKey, salt);
+  const commitment = shaHash(erc20Address.hex(32), amount, zkpPublicKey, salt);
 
-  logger.debug('Existing Proof Variables:');
-  const p = config.ZOKRATES_PACKING_SIZE;
-  const pt = Math.ceil((config.LEAF_HASHLENGTH * 8) / config.ZOKRATES_PACKING_SIZE); // packets in bits
-  logger.debug(
-    'erc20AddressPadded',
-    erc20AddressPadded,
-    ' : ',
-    utils.hexToFieldPreserve(erc20AddressPadded, 248, 1),
-  );
-  logger.debug('amount: ', `${amount} : `, utils.hexToFieldPreserve(amount, p, 1));
-  logger.debug('publicKey: ', zkpPublicKey, ' : ', utils.hexToFieldPreserve(zkpPublicKey, p, pt));
-  logger.debug('salt: ', salt, ' : ', utils.hexToFieldPreserve(salt, p, pt));
+  logger.debug('erc20Address', erc20Address.hex(32));
+  logger.debug('amount: ', amount);
+  logger.debug('publicKey: ', zkpPublicKey);
+  logger.debug('salt: ', salt);
 
   logger.debug('New Proof Variables:');
-  logger.debug('commitment: ', commitment, ' : ', utils.hexToFieldPreserve(commitment, p, pt));
+  logger.debug('commitment: ', commitment);
 
-  const publicInputHash = utils.shaHash(erc20AddressPadded, amount, commitment);
-  logger.debug(
-    'publicInputHash:',
-    publicInputHash,
-    ' : ',
-    utils.hexToFieldPreserve(publicInputHash, 248, 1, 1),
-  );
+  const publicInputHash = shaHash(erc20Address.hex(32), amount, commitment);
+  logger.debug('publicInputHash:', publicInputHash);
 
   // compute the proof
   logger.debug('Computing witness...');
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
-    new Element(erc20AddressPadded, 'field', 248, 1),
+    new Element(erc20Address.hex(32), 'field', 248, 1),
     new Element(amount, 'field', 128, 1),
     new Element(zkpPublicKey, 'field'),
     new Element(salt, 'field'),
@@ -116,10 +107,10 @@ async function mint(
   // convert to flattened array:
   proof = utils.flattenDeep(proof);
   // convert to decimal, as the solidity functions expect uints
-  proof = proof.map(el => utils.hexToDec(el));
+  proof = proof.map(el => hexToDec(el));
 
   // Approve fTokenShieldInstance to take tokens from minter's account.
-  const fTokenInstance = await getWeb3ContractInstance('ERC20Interface', erc20Address);
+  const fTokenInstance = await getWeb3ContractInstance('ERC20Interface', erc20Address.hex());
   const fTokenInstanceTx = fTokenInstance.methods.approve(
     fTokenShieldInstance._address,
     parseInt(amount, 16),
@@ -152,7 +143,7 @@ async function mint(
   logger.debug('Approving ERC-20 spend from: ', fTokenShieldInstance._address);
 
   const fTokenShieldInstanceTx = fTokenShieldInstance.methods.mint(
-    erc20AddressPadded,
+    erc20Address.hex(32),
     proof,
     publicInputs,
     amount,
@@ -211,9 +202,8 @@ async function transfer(
   zokratesOptions,
   signingMethod = undefined,
 ) {
-  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
-  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
-  const account = utils.ensure0x(blockchainOptions.account);
+  const erc20Address = new GN(blockchainOptions.erc20Address);
+  const account = ensure0x(blockchainOptions.account);
 
   const {
     codePath,
@@ -228,7 +218,10 @@ async function transfer(
   logger.debug('\nIN TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance(
+    'FTokenShield',
+    blockchainOptions.fTokenShieldAddress,
+  );
 
   const inputCommitments = _inputCommitments;
   const outputCommitments = _outputCommitments;
@@ -242,19 +235,19 @@ async function transfer(
     throw new Error(`Input commitments' values are too large`);
 
   // Calculate new arguments for the proof:
-  const senderPublicKey = utils.hash(senderZkpPrivateKey);
-  inputCommitments[0].nullifier = utils.shaHash(inputCommitments[0].salt, senderZkpPrivateKey);
+  const senderPublicKey = shaHash(senderZkpPrivateKey);
+  inputCommitments[0].nullifier = shaHash(inputCommitments[0].salt, senderZkpPrivateKey);
 
-  inputCommitments[1].nullifier = utils.shaHash(inputCommitments[1].salt, senderZkpPrivateKey);
+  inputCommitments[1].nullifier = shaHash(inputCommitments[1].salt, senderZkpPrivateKey);
 
-  outputCommitments[0].commitment = utils.shaHash(
-    erc20AddressPadded,
+  outputCommitments[0].commitment = shaHash(
+    erc20Address.hex(32),
     outputCommitments[0].value,
     receiverZkpPublicKey,
     outputCommitments[0].salt,
   );
-  outputCommitments[1].commitment = utils.shaHash(
-    erc20AddressPadded,
+  outputCommitments[1].commitment = shaHash(
+    erc20Address.hex(32),
     outputCommitments[1].value,
     senderPublicKey,
     outputCommitments[1].salt,
@@ -305,122 +298,39 @@ async function transfer(
     element => new Element(element, 'field', config.NODE_HASHLENGTH * 8, 1),
   ); // we truncate to 216 bits - sending the whole 256 bits will overflow the prime field
 
-  // console logging:
-  logger.debug('Existing Proof Variables:');
-  const p = config.ZOKRATES_PACKING_SIZE;
-  logger.debug(
-    `inputCommitments[0].value: ${inputCommitments[0].value} : ${utils.hexToFieldPreserve(
-      inputCommitments[0].value,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `inputCommitments[1].value: ${inputCommitments[1].value} : ${utils.hexToFieldPreserve(
-      inputCommitments[1].value,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `outputCommitments[0].value: ${outputCommitments[0].value} : ${utils.hexToFieldPreserve(
-      outputCommitments[0].value,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `outputCommitments[1].value: ${outputCommitments[1].value} : ${utils.hexToFieldPreserve(
-      outputCommitments[1].value,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `receiverPublicKey: ${receiverZkpPublicKey} : ${utils.hexToFieldPreserve(
-      receiverZkpPublicKey,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `inputCommitments[0].salt: ${inputCommitments[0].salt} : ${utils.hexToFieldPreserve(
-      inputCommitments[0].salt,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `inputCommitments[1].salt: ${inputCommitments[1].salt} : ${utils.hexToFieldPreserve(
-      inputCommitments[1].salt,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `outputCommitments[0].salt: ${outputCommitments[0].salt} : ${utils.hexToFieldPreserve(
-      outputCommitments[0].salt,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `outputCommitments[1].salt: ${outputCommitments[1].salt} : ${utils.hexToFieldPreserve(
-      outputCommitments[1].salt,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `senderSecretKey: ${senderZkpPrivateKey} : ${utils.hexToFieldPreserve(senderZkpPrivateKey, p)}`,
-  );
-  logger.debug(
-    `inputCommitments[0].commitment: ${inputCommitments[0].commitment} : ${utils.hexToFieldPreserve(
-      inputCommitments[0].commitment,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `inputCommitments[1].commitment: ${inputCommitments[1].commitment} : ${utils.hexToFieldPreserve(
-      inputCommitments[1].commitment,
-      p,
-    )}`,
-  );
+  logger.debug(`inputCommitments[0].value: ${inputCommitments[0].value}`);
+  logger.debug(`inputCommitments[1].value: ${inputCommitments[1].value}`);
+  logger.debug(`outputCommitments[0].value: ${outputCommitments[0].value}`);
+  logger.debug(`outputCommitments[1].value: ${outputCommitments[1].value}`);
+  logger.debug(`receiverPublicKey: ${receiverZkpPublicKey}`);
+  logger.debug(`inputCommitments[0].salt: ${inputCommitments[0].salt}`);
+  logger.debug(`inputCommitments[1].salt: ${inputCommitments[1].salt}`);
+  logger.debug(`outputCommitments[0].salt: ${outputCommitments[0].salt}`);
+  logger.debug(`outputCommitments[1].salt: ${outputCommitments[1].salt}`);
+  logger.debug(`senderSecretKey: ${senderZkpPrivateKey}`);
+  logger.debug(`inputCommitments[0].commitment: ${inputCommitments[0].commitment}`);
+  logger.debug(`inputCommitments[1].commitment: ${inputCommitments[1].commitment}`);
 
   logger.debug('New Proof Variables:');
-  logger.debug(`pkA: ${senderPublicKey} : ${utils.hexToFieldPreserve(senderPublicKey, p)}`);
-  logger.debug(
-    `inputCommitments[0].nullifier: ${inputCommitments[0].nullifier} : ${utils.hexToFieldPreserve(
-      inputCommitments[0].nullifier,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `inputCommitments[1].nullifier: ${inputCommitments[1].nullifier} : ${utils.hexToFieldPreserve(
-      inputCommitments[1].nullifier,
-      p,
-    )}`,
-  );
-  logger.debug(
-    `outputCommitments[0].commitment: ${
-      outputCommitments[0].commitment
-    } : ${utils.hexToFieldPreserve(outputCommitments[0].commitment, p)}`,
-  );
-  logger.debug(
-    `outputCommitments[1].commitment: ${
-      outputCommitments[1].commitment
-    } : ${utils.hexToFieldPreserve(outputCommitments[1].commitment, p)}`,
-  );
-  logger.debug(`root: ${root} : ${utils.hexToFieldPreserve(root, p)}`);
+  logger.debug(`pkA: ${senderPublicKey}`);
+  logger.debug(`inputCommitments[0].nullifier: ${inputCommitments[0].nullifier}`);
+  logger.debug(`inputCommitments[1].nullifier: ${inputCommitments[1].nullifier}`);
+  logger.debug(`outputCommitments[0].commitment: ${outputCommitments[0].commitment}`);
+  logger.debug(`outputCommitments[1].commitment: ${outputCommitments[1].commitment}`);
+  logger.debug(`root: ${root}`);
   logger.debug(`inputCommitments[0].siblingPath:`, inputCommitments[0].siblingPath);
   logger.debug(`inputCommitments[1].siblingPath:`, inputCommitments[1].siblingPath);
   logger.debug(`inputCommitments[0].commitmentIndex:`, inputCommitments[0].commitmentIndex);
   logger.debug(`inputCommitments[1].commitmentIndex:`, inputCommitments[1].commitmentIndex);
 
-  const publicInputHash = utils.shaHash(
+  const publicInputHash = shaHash(
     root,
     inputCommitments[0].nullifier,
     inputCommitments[1].nullifier,
     outputCommitments[0].commitment,
     outputCommitments[1].commitment,
   );
-  logger.debug(
-    'publicInputHash:',
-    publicInputHash,
-    ' : ',
-    utils.hexToFieldPreserve(publicInputHash, 248, 1, 1),
-  );
+  logger.debug('publicInputHash:', publicInputHash);
 
   const rootElement =
     process.env.HASH_TYPE === 'mimc'
@@ -432,7 +342,7 @@ async function transfer(
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
-    new Element(erc20AddressPadded, 'field', 248, 1),
+    new Element(erc20Address.hex(32), 'field', 248, 1),
     new Element(inputCommitments[0].value, 'field', 128, 1),
     new Element(senderZkpPrivateKey, 'field'),
     new Element(inputCommitments[0].salt, 'field'),
@@ -488,7 +398,7 @@ async function transfer(
   // convert to flattened array:
   proof = utils.flattenDeep(proof);
   // convert to decimal, as the solidity functions expect uints
-  proof = proof.map(el => utils.hexToDec(el));
+  proof = proof.map(el => hexToDec(el));
 
   logger.debug('Transferring within the Shield contract');
 
@@ -573,9 +483,8 @@ async function simpleFungibleBatchTransfer(
   zokratesOptions,
   signingMethod = undefined,
 ) {
-  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
-  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
-  const account = utils.ensure0x(blockchainOptions.account);
+  const erc20Address = new GN(blockchainOptions.erc20Address);
+  const account = ensure0x(blockchainOptions.account);
 
   const {
     codePath,
@@ -590,7 +499,10 @@ async function simpleFungibleBatchTransfer(
   logger.debug('\nIN BATCH TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance(
+    'FTokenShield',
+    blockchainOptions.fTokenShieldAddress,
+  );
 
   const inputCommitment = _inputCommitment;
 
@@ -606,11 +518,11 @@ async function simpleFungibleBatchTransfer(
     throw new Error(`Input commitment value was ${inputSum} but output total was ${outputSum}`);
 
   // Calculate new arguments for the proof:
-  inputCommitment.nullifier = utils.shaHash(inputCommitment.salt, senderSecretKey);
+  inputCommitment.nullifier = shaHash(inputCommitment.salt, senderSecretKey);
 
   for (const outputCommitment of outputCommitments) {
-    outputCommitment.commitment = utils.shaHash(
-      erc20AddressPadded,
+    outputCommitment.commitment = shaHash(
+      erc20Address.hex(32),
       outputCommitment.value,
       outputCommitment.receiver.publicKey,
       outputCommitment.salt,
@@ -640,7 +552,7 @@ async function simpleFungibleBatchTransfer(
     nodeValue => new Element(nodeValue, 'field', config.NODE_HASHLENGTH * 8, 1),
   ); // we truncate to 216 bits - sending the whole 256 bits will overflow the prime field
 
-  const publicInputHash = utils.shaHash(
+  const publicInputHash = shaHash(
     root,
     inputCommitment.nullifier,
     ...outputCommitments.map(item => item.commitment),
@@ -655,7 +567,7 @@ async function simpleFungibleBatchTransfer(
   logger.debug('Computing witness...');
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
-    new Element(erc20AddressPadded, 'field', 248, 1),
+    new Element(erc20Address.hex(32), 'field', 248, 1),
     new Element(inputCommitment.value, 'field', 128, 1),
     new Element(senderSecretKey, 'field'),
     new Element(inputCommitment.salt, 'field'),
@@ -705,7 +617,7 @@ async function simpleFungibleBatchTransfer(
   // convert to flattened array:
   proof = utils.flattenDeep(proof);
   // convert to decimal, as the solidity functions expect uints
-  proof = proof.map(el => utils.hexToDec(el));
+  proof = proof.map(el => hexToDec(el));
 
   logger.debug('Transferring within the Shield contract');
 
@@ -789,9 +701,8 @@ async function consolidationTransfer(
   zokratesOptions,
   signingMethod = undefined,
 ) {
-  const { fTokenShieldAddress, erc20Address } = blockchainOptions;
-  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
-  const account = utils.ensure0x(blockchainOptions.account);
+  const erc20Address = new GN(blockchainOptions.erc20Address);
+  const account = ensure0x(blockchainOptions.account);
 
   const {
     codePath,
@@ -806,7 +717,10 @@ async function consolidationTransfer(
   logger.debug('\nIN CONSOLIDATION TRANSFER...');
   logger.debug('Finding the relevant Shield and Verifier contracts');
 
-  const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
+  const fTokenShieldInstance = await getWeb3ContractInstance(
+    'FTokenShield',
+    blockchainOptions.fTokenShieldAddress,
+  );
 
   const inputCommitments = _inputCommitments;
   const outputCommitment = _outputCommitment;
@@ -825,11 +739,11 @@ async function consolidationTransfer(
 
   // Calculate new arguments for the proof:
   for (let i = 0; i < inputCommitments.length; i += 1) {
-    inputCommitments[i].nullifier = utils.shaHash(inputCommitments[i].salt, senderSecretKey);
+    inputCommitments[i].nullifier = shaHash(inputCommitments[i].salt, senderSecretKey);
   }
 
-  outputCommitment.commitment = utils.shaHash(
-    erc20AddressPadded,
+  outputCommitment.commitment = shaHash(
+    erc20Address.hex(32),
     outputCommitment.value,
     receiverPublicKey,
     outputCommitment.salt,
@@ -854,7 +768,7 @@ async function consolidationTransfer(
 
   const root = inputCommitments[0].siblingPath[0];
 
-  const publicInputHash = utils.shaHash(
+  const publicInputHash = shaHash(
     root,
     ...inputCommitments.map(item => item.nullifier),
     outputCommitment.commitment,
@@ -864,7 +778,7 @@ async function consolidationTransfer(
   logger.debug('Computing witness...');
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
-    new Element(erc20AddressPadded, 'field', 248, 1),
+    new Element(erc20Address.hex(32), 'field', 248, 1),
     ...inputCommitments.map(item => new Element(item.value, 'field', 128, 1)),
     new Element(senderSecretKey, 'field'),
     ...inputCommitments.map(item => new Element(item.salt, 'field')),
@@ -900,7 +814,7 @@ async function consolidationTransfer(
   // convert to flattened array:
   proof = utils.flattenDeep(proof);
   // convert to decimal, as the solidity functions expect uints
-  proof = proof.map(el => utils.hexToDec(el));
+  proof = proof.map(el => hexToDec(el));
 
   logger.debug('Transferring within the Shield contract');
 
@@ -972,10 +886,10 @@ async function burn(
   zokratesOptions,
   signingMethod = undefined,
 ) {
-  const { fTokenShieldAddress, erc20Address, tokenReceiver: _payTo } = blockchainOptions;
-  const erc20AddressPadded = `0x${utils.strip0x(erc20Address).padStart(64, '0')}`;
+  const { fTokenShieldAddress, tokenReceiver: _payTo } = blockchainOptions;
+  const erc20Address = new GN(blockchainOptions.erc20Address);
 
-  const account = utils.ensure0x(blockchainOptions.account);
+  const account = ensure0x(blockchainOptions.account);
 
   const {
     codePath,
@@ -996,7 +910,7 @@ async function burn(
   const fTokenShieldInstance = await getWeb3ContractInstance('FTokenShield', fTokenShieldAddress);
 
   // Calculate new arguments for the proof:
-  const nullifier = utils.shaHash(salt, receiverZkpPrivateKey);
+  const nullifier = shaHash(salt, receiverZkpPrivateKey);
 
   // Get the sibling-path from the token commitments (leaves) to the root. Express each node as an Element class.
   const siblingPath = await merkleTree.getSiblingPath(
@@ -1017,40 +931,23 @@ async function burn(
   ); // we truncate to 216 bits - sending the whole 256 bits will overflow the prime field
 
   // Summarise values in the console:
-  logger.debug('Existing Proof Variables:');
-  const p = config.ZOKRATES_PACKING_SIZE;
-  logger.debug(`amount: ${amount} : ${utils.hexToFieldPreserve(amount, p)}`);
-  logger.debug(
-    `receiverSecretKey: ${receiverZkpPrivateKey} : ${utils.hexToFieldPreserve(
-      receiverZkpPrivateKey,
-      p,
-    )}`,
-  );
-  logger.debug(`salt: ${salt} : ${utils.hexToFieldPreserve(salt, p)}`);
-  logger.debug(`payTo: ${payTo} : ${utils.hexToFieldPreserve(payTo, p)}`);
-  const payToLeftPadded = utils.leftPadHex(payTo, config.LEAF_HASHLENGTH * 2); // left-pad the payToAddress with 0's to fill all 256 bits (64 octets) (so the sha256 function is hashing the same thing as inside the zokrates proof)
+  logger.debug(`amount: ${amount}`);
+  logger.debug(`receiverSecretKey: ${receiverZkpPrivateKey}`);
+  logger.debug(`salt: ${salt}`);
+  logger.debug(`payTo: ${payTo}`);
+  const payToLeftPadded = leftPadHex(payTo, config.LEAF_HASHLENGTH * 2); // left-pad the payToAddress with 0's to fill all 256 bits (64 octets) (so the sha256 function is hashing the same thing as inside the zokrates proof)
   logger.debug(`payToLeftPadded: ${payToLeftPadded}`);
 
   logger.debug('New Proof Variables:');
-  logger.debug(`nullifier: ${nullifier} : ${utils.hexToFieldPreserve(nullifier, p)}`);
-  logger.debug(`commitment: ${commitment} : ${utils.hexToFieldPreserve(commitment, p)}`);
-  logger.debug(`root: ${root} : ${utils.hexToFieldPreserve(root, p)}`);
+  logger.debug(`nullifier: ${nullifier}`);
+  logger.debug(`commitment: ${commitment}`);
+  logger.debug(`root: ${root}`);
   logger.debug(`siblingPath:`, siblingPath);
   logger.debug(`commitmentIndex:`, commitmentIndex);
 
-  const publicInputHash = utils.shaHash(
-    erc20AddressPadded,
-    root,
-    nullifier,
-    amount,
-    payToLeftPadded,
-  ); // notice we're using the version of payTo which has been padded to 256-bits; to match our derivation of publicInputHash within our zokrates proof.
-  logger.debug(
-    'publicInputHash:',
-    publicInputHash,
-    ' : ',
-    utils.hexToFieldPreserve(publicInputHash, 248, 1, 1),
-  );
+  // notice we're using the version of payTo which has been padded to 256-bits; to match our derivation of publicInputHash within our zokrates proof.
+  const publicInputHash = shaHash(erc20Address.hex(32), root, nullifier, amount, payToLeftPadded);
+  logger.debug('publicInputHash:', publicInputHash);
   const rootElement =
     process.env.HASH_TYPE === 'mimc'
       ? new Element(root, 'field', 256, 1)
@@ -1060,7 +957,7 @@ async function burn(
 
   const allInputs = utils.formatInputsForZkSnark([
     new Element(publicInputHash, 'field', 248, 1),
-    new Element(erc20AddressPadded, 'field', 248, 1),
+    new Element(erc20Address.hex(32), 'field', 248, 1),
     new Element(payTo, 'field'),
     new Element(amount, 'field', 128, 1),
     new Element(receiverZkpPrivateKey, 'field'),
@@ -1103,7 +1000,7 @@ async function burn(
   // convert to flattened array:
   proof = utils.flattenDeep(proof);
   // convert to decimal, as the solidity functions expect uints
-  proof = proof.map(el => utils.hexToDec(el));
+  proof = proof.map(el => hexToDec(el));
 
   logger.debug('Burning within the Shield contract');
 
@@ -1118,7 +1015,7 @@ async function burn(
 
   // Burn the commitment and return tokens to the payTo account.
   const encodedRawTransaction = fTokenShieldInstance.methods.burn(
-    erc20AddressPadded,
+    erc20Address.hex(32),
     proof,
     publicInputs,
     root,

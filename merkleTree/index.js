@@ -1,4 +1,5 @@
 const request = require('request');
+const { strip0x } = require('zkp-utils');
 const config = require('../config');
 const utilsPoll = require('./utils');
 const utils = require('../utils');
@@ -340,8 +341,8 @@ async function checkCorrectness(
 ) {
   console.log('Checking h(contractAddress|value|publicKey|salt) = z...');
   const commitmentCheck = utils.concatenateThenHash(
-    `0x${utils.strip0x(contractAddress).padStart(64, '0')}`,
-    utils.strip0x(value).slice(-(config.LEAF_HASHLENGTH * 2)),
+    `0x${strip0x(contractAddress).padStart(64, '0')}`,
+    strip0x(value).slice(-(config.LEAF_HASHLENGTH * 2)),
     publicKey,
     salt,
   );

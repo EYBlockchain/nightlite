@@ -5,6 +5,7 @@
 rest api calls, and the heavy-lifitng token-zkp.js and zokrates.js.  It exists so that the amount of logic in restapi.js is absolutely minimised.
 */
 const fs = require('fs');
+const { hexToDec } = require('zkp-utils');
 const config = require('./config');
 const utils = require('./utils');
 const Web3 = require('./provider');
@@ -54,7 +55,7 @@ async function loadVk(vkDescription, vkJsonFile, blockchainOptions) {
   let vk = JSON.parse(fs.readFileSync(vkJsonFile, 'utf8'));
   vk = Object.values(vk);
   vk = utils.flattenDeep(vk);
-  vk = vk.map(el => utils.hexToDec(el));
+  vk = vk.map(el => hexToDec(el));
 
   // upload the vk to the smart contract
   logger.debug('Registering verification key');
