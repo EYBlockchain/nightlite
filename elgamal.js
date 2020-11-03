@@ -1,11 +1,10 @@
 /**
 functions to support El-Gamal encryption over a BabyJubJub curve
 */
-
+const { ensure0x } = require('zkp-utils');
 const { squareRootModPrime, addMod, mulMod } = require('./number-theory');
 const { BABYJUBJUB, ZOKRATES_PRIME, TEST_PRIVATE_KEYS } = require('./config');
 const { modDivide } = require('./modular-division'); // TODO REPLACE WITH NPM VERSION
-const utils = require('./utils');
 
 const one = BigInt(1);
 const { JUBJUBE, JUBJUBC, JUBJUBD, JUBJUBA, GENERATOR } = BABYJUBJUB;
@@ -78,7 +77,7 @@ function setAuthorityPrivateKeys(keys = TEST_PRIVATE_KEYS) {
   if (keys[0] === TEST_PRIVATE_KEYS[0])
     console.log('DANGER, WILL ROBINSON! INSECURE TEST-KEYS ARE BEING USED!');
   for (let i = 0; i < keys.length; i++) {
-    AUTHORITY_PRIVATE_KEYS[i] = utils.ensure0x(keys[i]);
+    AUTHORITY_PRIVATE_KEYS[i] = ensure0x(keys[i]);
   }
   setAuthorityPublicKeys();
 }
@@ -104,7 +103,7 @@ function enc(randomSecret, strings) {
     );
   // We can't directly encrypt hex strings.  We can encrypt a curve point however,
   // so we convert a string to a curve point by a scalar multiplication
-  const messages = strings.map(e => scalarMult(utils.ensure0x(e), GENERATOR));
+  const messages = strings.map(e => scalarMult(ensure0x(e), GENERATOR));
   // now we use the public keys and random number to generate shared secrets
   const sharedSecrets = AUTHORITY_PUBLIC_KEYS.map(e => {
     if (e === undefined) throw new Error('Trying to encrypt with a undefined public key');
@@ -167,7 +166,7 @@ function edwardsCompress(p) {
   const yBits = py.toString(2).padStart(256, '0');
   const sign = xBits[255] === '1' ? '1' : '0';
   const yBitsC = sign.concat(yBits.slice(1)); // add in the sign bit
-  const y = utils.ensure0x(BigInt('0b'.concat(yBitsC)).toString(16).padStart(64, '0')); // put yBits into hex
+  const y = ensure0x(BigInt('0b'.concat(yBitsC)).toString(16).padStart(64, '0')); // put yBits into hex
   return y;
 }
 
