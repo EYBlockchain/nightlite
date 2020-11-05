@@ -36,8 +36,4 @@ const logger = createLogger({
   transports: [new transports.Console()],
 });
 
-logger.info.bind(logger);
-logger.debug.bind(logger);
-logger.error.bind(logger);
-
 module.exports = logger;

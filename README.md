@@ -38,7 +38,7 @@ And then, (assuming this is your final Docker container), copy the necessary Zok
 your container:
 
 ```Dockerfile
-FROM node:11.15 WORKDIR /app
+FROM node:14.15 WORKDIR /app
 
 # Copy over Zokrates files into this container
 COPY --from=builder /home/zokrates/zokrates /app/zokrates
