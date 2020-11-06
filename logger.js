@@ -14,7 +14,6 @@ const logLevel = process.env.NIGHTLITE_LOG_LEVEL ? process.env.NIGHTLITE_LOG_LEV
 const logger = createLogger({
   level: logLevel,
   format: format.combine(
-    format.errors({ stack: true }),
     format.colorize(),
     format.printf(info => {
       const splatArgs = info[Symbol.for('splat')];
@@ -36,8 +35,4 @@ const logger = createLogger({
   transports: [new transports.Console()],
 });
 
-module.exports = {
-  info: logger.info,
-  erro: logger.error,
-  debug: logger.debug,
-};
+module.exports = logger;
