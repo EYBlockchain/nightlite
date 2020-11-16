@@ -231,7 +231,7 @@ async function transfer(
     parseInt(inputCommitments[0].value, 16) + parseInt(inputCommitments[1].value, 16);
   const outputSum =
     parseInt(outputCommitments[0].value, 16) + parseInt(outputCommitments[1].value, 16);
-  if (inputSum > 0xffffffff || outputSum > 0xffffffff)
+  if (inputSum > 0xffffffffff || outputSum > 0xffffffffff)
     throw new Error(`Input commitments' values are too large`);
 
   // Calculate new arguments for the proof:
