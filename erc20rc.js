@@ -453,7 +453,7 @@ async function transfer(
   );
 
   const publicInputHash = utils.concatenateThenHash(...compressedPublicInputsArray);
-  logger.debug('publicInputHash:', publicInputHash);
+  logger.debug('publicInputHash: ', publicInputHash);
 
   // compute the proof
   logger.debug('Computing witness...');
