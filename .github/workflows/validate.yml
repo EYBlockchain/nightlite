@@ -5,11 +5,17 @@ on: pull_request
 jobs:
   validate:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node: [14.15]
+
     steps:
       - uses: actions/checkout@master
+
       - uses: actions/setup-node@v1
         with:
-          node-version: '14.15.0'
+          node-version: ${{ matrix.node }}
 
       - run: npm install --no-save
         env:
