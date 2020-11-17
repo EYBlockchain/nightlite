@@ -201,7 +201,7 @@ overrideDefaultConfig({
 Currently, most functions that interact with smart contracts just "know" what the proper provider
 is, but this isn't good. We need to figure out how to get these functions their providers.
 
-Here are some possibilities: 
+Here are some possibilities:
 
 1. **Pass the provider to each function**: The most straightforward, but also a lot of clutter
 2. Set a "provider" singleton: Requires some additional setup from the user (probably just calling
