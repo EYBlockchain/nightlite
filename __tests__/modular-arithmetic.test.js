@@ -1,6 +1,6 @@
 // tests for various aspects of modular arithmetic and related functions
 const fc = require('fast-check');
-const { randomHex } = require('zkp-utils');
+const { randomHex } = require('@eyblockchain/zkp-utils');
 const {
   add,
   enc,

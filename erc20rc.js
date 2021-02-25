@@ -7,7 +7,14 @@
  * @author westlad, Chaitanya-Konda, iAmMichaelConnor
  */
 const zokrates = require('@eyblockchain/zokrates.js');
-const { ensure0x, strip0x, shaHash, randomHex, hexToDec, leftPadHex } = require('zkp-utils');
+const {
+  ensure0x,
+  strip0x,
+  shaHash,
+  randomHex,
+  hexToDec,
+  leftPadHex,
+} = require('@eyblockchain/zkp-utils');
 const { GN } = require('general-number');
 const fs = require('fs');
 const config = require('./config');

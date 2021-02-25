@@ -1,4 +1,4 @@
-const { ensure0x } = require('zkp-utils');
+const { ensure0x } = require('@eyblockchain/zkp-utils');
 const config = require('./config');
 
 /**
