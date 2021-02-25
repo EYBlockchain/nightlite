@@ -16,4 +16,9 @@ jobs:
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - run: npm run lint
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - run: npm run lint:md
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
