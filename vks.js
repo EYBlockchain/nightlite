@@ -5,7 +5,7 @@
 rest api calls, and the heavy-lifitng token-zkp.js and zokrates.js.  It exists so that the amount of logic in restapi.js is absolutely minimised.
 */
 const fs = require('fs');
-const { hexToDec } = require('zkp-utils');
+const { hexToDec } = require('@eyblockchain/zkp-utils');
 const config = require('./config');
 const utils = require('./utils');
 const Web3 = require('./provider');

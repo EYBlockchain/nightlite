@@ -1,7 +1,7 @@
 /**
 functions to support El-Gamal encryption over a BabyJubJub curve
 */
-const { ensure0x } = require('zkp-utils');
+const { ensure0x } = require('@eyblockchain/zkp-utils');
 const { squareRootModPrime, addMod, mulMod } = require('./number-theory');
 const { BABYJUBJUB, ZOKRATES_PRIME, TEST_PRIVATE_KEYS } = require('./config');
 const { modDivide } = require('./modular-division'); // TODO REPLACE WITH NPM VERSION

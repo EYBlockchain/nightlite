@@ -13,7 +13,7 @@ const {
   hexToDecLimbs,
   shaHash,
   mimcHash,
-} = require('zkp-utils');
+} = require('@eyblockchain/zkp-utils');
 const logger = require('./logger');
 const config = require('./config');
 

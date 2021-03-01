@@ -1,5 +1,5 @@
 const request = require('request');
-const { strip0x } = require('zkp-utils');
+const { strip0x } = require('@eyblockchain/zkp-utils');
 const config = require('../config');
 const utilsPoll = require('./utils');
 const utils = require('../utils');
