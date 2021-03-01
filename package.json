@@ -32,10 +32,10 @@
     "prettier-plugin-solidity": "^1.0.0-alpha.31"
   },
   "dependencies": {
+    "@eyblockchain/general-number": "^1.0.5",
     "@eyblockchain/zkp-utils": "^1.0.9",
     "@eyblockchain/zokrates.js": "^1.2.0",
     "big-integer": "^1.6.48",
-    "general-number": "^1.0.1",
     "hex-to-binary": "^1.0.1",
     "keccak": "^2.1.0",
     "request": "^2.88.0",

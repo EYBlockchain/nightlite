@@ -9,7 +9,7 @@
 
 const zokrates = require('@eyblockchain/zokrates.js');
 const { ensure0x, shaHash, hexToDec, leftPadHex } = require('@eyblockchain/zkp-utils');
-const { GN } = require('general-number');
+const { GN } = require('@eyblockchain/general-number');
 const fs = require('fs');
 const config = require('./config');
 const merkleTree = require('./merkleTree');
